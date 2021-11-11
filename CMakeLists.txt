@@ -1,4 +1,7 @@
 cmake_minimum_required(VERSION 3.6)
+# fxxk https://stackoverflow.com/questions/6241922/how-to-use-cmake-install-prefix
+# 还会突然坏掉，哎。再出一次问题，就在bat里加参数吧。cmake -DCMAKE_INSTALL_PREFIX=C:/MyExe ..
+SET(CMAKE_INSTALL_PREFIX "C:/MyExe" CACHE PATH "my exe dir")
 
 GET_FILENAME_COMPONENT(PROJECT_NAME ${CMAKE_CURRENT_SOURCE_DIR} NAME)
 project(${PROJECT_NAME})
@@ -9,7 +12,7 @@ project(${PROJECT_NAME})
 # https://stackoverflow.com/questions/39481958/setting-cmake-install-prefix-from-cmakelists-txt-file
 # Use this snippet *after* PROJECT(xxx):
 IF(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
-  SET(CMAKE_INSTALL_PREFIX "C:/MyExe")
+  SET(CMAKE_INSTALL_PREFIX "C:/MyExe" CACHE PATH "my exe dir")
 ENDIF(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
 
 AUX_SOURCE_DIRECTORY(. ALL_SRC)

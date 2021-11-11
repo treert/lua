@@ -2,6 +2,6 @@
 if not exist build ( md build )
 
 cd build
-cmake ..
+cmake -DCMAKE_INSTALL_PREFIX=C:/MyExe ..
 
 pause
