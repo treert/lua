@@ -609,6 +609,18 @@ static int createlabel (LexState *ls, TString *name, int line,
   return 0;
 }
 
+static int insertcontinelabel(LexState *ls){
+	FuncState* fs = ls->fs;
+	Labellist* ll = &ls->dyd->label;
+    TString* name = luaS_newliteral(fs->ls->L, "continue");
+	int l = newlabelentry(ls, ll, name, 0, luaK_getlabel(fs));
+	if (solvegotos(ls, &ll->arr[l])) {  /* need close? */
+		luaK_codeABC(fs, OP_CLOSE, luaY_nvarstack(fs), 0, 0);
+		return 1;
+	}
+	return 0;
+}
+
 
 /*
 ** Adjust pending gotos to outer level of a block.
@@ -1429,6 +1441,25 @@ static void breakstat (LexState *ls) {
   newgotoentry(ls, luaS_newliteral(ls->L, "break"), line, luaK_jump(ls->fs));
 }
 
+static void continuestat(LexState* ls) {
+	FuncState* fs = ls->fs;
+	int line = ls->linenumber;
+    luaX_next(ls);  /* skip continue */
+	TString* name = luaS_newliteral(ls->L, "continue");  /* label's name */
+	Labeldesc* lb = findlabel(ls, name);
+	if (lb == NULL)
+	  /* forward jump; will be resolved when the label is declared */
+		newgotoentry(ls, name, line, luaK_jump(fs));
+	else {  /* found a label */
+	  /* backward jump; will be resolved here */
+		int lblevel = reglevel(fs, lb->nactvar);  /* label level */
+		if (luaY_nvarstack(fs) > lblevel)  /* leaving the scope of a variable? */
+			luaK_codeABC(fs, OP_CLOSE, lblevel, 0, 0);
+		/* create jump and link it to the label */
+		luaK_patchlist(fs, luaK_jump(fs), lb->pc);
+	}
+}
+
 
 /*
 ** Check whether there is already a label with the given 'name'.
@@ -1460,9 +1491,10 @@ static void whilestat (LexState *ls, int line) {
   int condexit;
   BlockCnt bl;
   luaX_next(ls);  /* skip WHILE */
+  enterblock(fs, &bl, 1);
+  insertcontinelabel(ls);
   whileinit = luaK_getlabel(fs);
   condexit = cond(ls);
-  enterblock(fs, &bl, 1);
   checknext(ls, TK_DO);
   block(ls);
   luaK_jumpto(fs, whileinit);
@@ -1479,6 +1511,7 @@ static void repeatstat (LexState *ls, int line) {
   int repeat_init = luaK_getlabel(fs);
   BlockCnt bl1, bl2;
   enterblock(fs, &bl1, 1);  /* loop block */
+  insertcontinelabel(ls);// skip until condition
   enterblock(fs, &bl2, 0);  /* scope block */
   luaX_next(ls);  /* skip REPEAT */
   statlist(ls);
@@ -1543,6 +1576,7 @@ static void forbody (LexState *ls, int base, int line, int nvars, int isgen) {
   luaK_reserveregs(fs, nvars);
   block(ls);
   leaveblock(fs);  /* end of scope for declared variables */
+  insertcontinelabel(ls);
   fixforjump(fs, prep, luaK_getlabel(fs), 0);
   if (isgen) {  /* generic for? */
     luaK_codeABC(fs, OP_TFORCALL, base, 0, nvars);
@@ -1632,6 +1666,7 @@ static void test_then_block (LexState *ls, int *escapelist) {
   luaX_next(ls);  /* skip IF or ELSEIF */
   expr(ls, &v);  /* read condition */
   checknext(ls, TK_THEN);
+  // todo@om 简单的优化，continue语句也可以搞一个.
   if (ls->t.token == TK_BREAK) {  /* 'if x then break' ? */
     int line = ls->linenumber;
     luaK_goiffalse(ls->fs, &v);  /* will jump if condition is true */
@@ -1886,6 +1921,10 @@ static void statement (LexState *ls) {
     case TK_BREAK: {  /* stat -> breakstat */
       breakstat(ls);
       break;
+    }
+    case TK_CONTINUE: { /* stat -> continuestat */
+        continuestat(ls);
+        break;
     }
     case TK_GOTO: {  /* stat -> 'goto' NAME */
       luaX_next(ls);  /* skip 'goto' */
