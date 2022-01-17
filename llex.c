@@ -174,6 +174,8 @@ void luaX_setinput (lua_State *L, LexState *ls, ZIO *z, TString *source,
   ls->fs = NULL;
   ls->linenumber = 1;
   ls->lastline = 1;
+  ls->dollar_flag = 0;
+  ls->dollar_open_cnt = 0;
   ls->source = source;
   ls->envn = luaS_newliteral(L, LUA_ENV);  /* get env name */
   luaZ_resizebuffer(ls->L, ls->buff, LUA_MINBUFFER);  /* initialize buffer */
@@ -378,6 +380,65 @@ static int readdecesc (LexState *ls) {
   return r;
 }
 
+// 读取字符存入buffer, 支持两个del
+static void read_string_and_add_to_buffer(LexState *ls,int del1, int del2) {
+    while (ls->current != del1 && ls->current != del2) {
+        switch (ls->current) {
+        case EOZ:
+            lexerror(ls, "unfinished string", TK_EOS);
+            break;  /* to avoid warnings */
+        case '\n':
+        case '\r':
+            // 想了想，还是和lua保持一致吧。
+            lexerror(ls, "unfinished string", TK_STRING);
+            break;  /* to avoid warnings */
+        case '\\': {  /* escape sequences */
+            int c;  /* final character to be saved */
+            save_and_next(ls);  /* keep '\\' for error messages */
+            switch (ls->current) {
+            case 'a': c = '\a'; goto read_save;
+            case 'b': c = '\b'; goto read_save;
+            case 'f': c = '\f'; goto read_save;
+            case 'n': c = '\n'; goto read_save;
+            case 'r': c = '\r'; goto read_save;
+            case 't': c = '\t'; goto read_save;
+            case 'v': c = '\v'; goto read_save;
+            case 'x': c = readhexaesc(ls); goto read_save;
+            case 'u': utf8esc(ls);  goto no_save;
+            case '\n': case '\r':
+                inclinenumber(ls); c = '\n'; goto only_save;
+            case '\\': case '\"': case '\'':
+                c = ls->current; goto read_save;
+            case EOZ: goto no_save;  /* will raise an error next loop */
+            case 'z': {  /* zap following span of spaces */
+                luaZ_buffremove(ls->buff, 1);  /* remove '\\' */
+                next(ls);  /* skip the 'z' */
+                while (lisspace(ls->current)) {
+                    if (currIsNewline(ls)) inclinenumber(ls);
+                    else next(ls);
+                }
+                goto no_save;
+            }
+            default: {
+                esccheck(ls, lisdigit(ls->current), "invalid escape sequence");
+                c = readdecesc(ls);  /* digital escape '\ddd' */
+                goto only_save;
+            }
+            }
+        read_save:
+            next(ls);
+            /* go through */
+        only_save:
+            luaZ_buffremove(ls->buff, 1);  /* remove '\\' */
+            save(ls, c);
+            /* go through */
+        no_save: break;
+        }
+        default:
+            save_and_next(ls);
+        }
+    }
+}
 
 static void read_string (LexState *ls, int del, SemInfo *seminfo) {
   save_and_next(ls);  /* keep delimiter (for error messages) */
@@ -441,9 +502,77 @@ static void read_string (LexState *ls, int del, SemInfo *seminfo) {
                                    luaZ_bufflen(ls->buff) - 2);
 }
 
+// todo@om 什么时候看看把中文也可以当成Name
+static int read_name_or_keyword(LexState* ls, SemInfo* seminfo) {
+    lua_assert(lislalpha(ls->current));
+    TString* ts;
+    do {
+        save_and_next(ls);
+    } while (lislalnum(ls->current));
+    ts = luaX_newstring(ls, luaZ_buffer(ls->buff),
+        luaZ_bufflen(ls->buff));
+    seminfo->ts = ts;
+    if (isreserved(ts))  /* reserved word? */
+        return ts->extra - 1 + FIRST_RESERVED;
+    else {
+        return TK_NAME;
+    }
+}
+
+static int read_in_dollar_string(LexState* ls, SemInfo* seminfo) {
+    lua_assert(luaZ_bufflen(ls->buff) == 0);
+    lua_assert(ls->dollar_flag && !ls->dollar_open_cnt);
+    int del = ls->dollar_flag & 0xff;
+    int is_dollar_mode = ls->dollar_flag & 0x800;
+    if (is_dollar_mode) {
+        ls->dollar_flag ^= 0x800;// close dollar mode
+        if (ls->current == '{') {
+            ls->dollar_open_cnt = 1;
+            next(ls);
+            return '{';
+        }
+        else if (lislalpha(ls->current)) {
+            return read_name_or_keyword(ls, seminfo);
+        }
+        else {
+            // 这个实际是语义错误，没想好咋处理，先在这儿报错吧
+            lexerror(ls, "expect $,<alpha>,{ after '$' in <$string>", ls->current);
+            return 0;// 实际不会执行到，上面就抛异常了。
+        }
+    }
+    while (ls->current != del)
+    {
+        read_string_and_add_to_buffer(ls, del, '$');
+        if (ls->current == '$') {
+            next(ls);
+            if(ls->current == '$') save_and_next(ls); // $$
+            else {
+                ls->dollar_flag |= 0x800;// 进入 $ 模式
+                break;
+            }
+        }
+    }
+    if (ls->current == del) {
+        // $string finish。 允许最后一个字符是$，没啥坏处。
+        ls->dollar_flag = 0;
+        next(ls);// skip delimiter
+    }
+    else if(luaZ_bufflen(ls->buff) == 0){
+        // 小优化，如果直接进入dollar mode，那就直接返回下个token好了。
+        lua_assert(ls->dollar_flag & 0x800);
+        return read_in_dollar_string(ls, seminfo);
+    }
+
+    seminfo->ts = luaX_newstring(ls, luaZ_buffer(ls->buff), luaZ_bufflen(ls->buff));
+    return TK_STRING;
+}
+
 
 static int llex (LexState *ls, SemInfo *seminfo) {
   luaZ_resetbuffer(ls->buff);
+  if (ls->dollar_flag && !ls->dollar_open_cnt) {
+    return read_in_dollar_string(ls, seminfo);
+  }
   for (;;) {
     switch (ls->current) {
       case '\n': case '\r': {  /* line breaks */
@@ -453,6 +582,16 @@ static int llex (LexState *ls, SemInfo *seminfo) {
       case ' ': case '\f': case '\t': case '\v': {  /* spaces */
         next(ls);
         break;
+      }
+      case '$': { /* $string or $function */
+        next(ls);
+        if (ls->current == '"' || ls->current == '\'') {
+          if(ls->dollar_flag) lexerror(ls, "do not support inner <$string>", '$');
+          ls->dollar_flag = ls->current;
+          lua_assert(ls->dollar_open_cnt == 0);
+          next(ls);// skip delimiter
+        }
+        return '$';
       }
       case '-': {  /* '-' or '--' (comment) */
         next(ls);
@@ -538,21 +677,20 @@ static int llex (LexState *ls, SemInfo *seminfo) {
       }
       default: {
         if (lislalpha(ls->current)) {  /* identifier or reserved word? */
-          TString *ts;
-          do {
-            save_and_next(ls);
-          } while (lislalnum(ls->current));
-          ts = luaX_newstring(ls, luaZ_buffer(ls->buff),
-                                  luaZ_bufflen(ls->buff));
-          seminfo->ts = ts;
-          if (isreserved(ts))  /* reserved word? */
-            return ts->extra - 1 + FIRST_RESERVED;
-          else {
-            return TK_NAME;
-          }
+          return read_name_or_keyword(ls, seminfo);
         }
         else {  /* single-char tokens ('+', '*', '%', '{', '}', ...) */
           int c = ls->current;
+          if (ls->dollar_flag) {
+            if('{' == c) ++ls->dollar_open_cnt;
+            else if ('}' == c) {
+              --ls->dollar_open_cnt;
+              if (ls->dollar_open_cnt < 0)
+              {
+                lexerror(ls, "miss matched '{' in <$string>", '}');
+              }
+            }
+          }
           next(ls);
           return c;
         }

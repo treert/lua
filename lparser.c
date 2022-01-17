@@ -139,6 +139,18 @@ static void check_match (LexState *ls, int what, int who, int where) {
   }
 }
 
+static TString* getstr_from_name_or_keyword(LexState* ls) {
+    TString* ts;
+    int token = ls->t.token;
+    if (token == TK_NAME || 
+        (token >= FIRST_RESERVED && token <= FIRST_RESERVED + NUM_RESERVED - 1)) {
+        ts = ls->t.seminfo.ts;
+        return ts;
+    }
+    else {
+        return NULL;
+    }
+}
 
 static TString *str_checkname (LexState *ls) {
   TString *ts;
@@ -1008,6 +1020,85 @@ static void body (LexState *ls, expdesc *e, int ismethod, int line) {
   close_func(ls);
 }
 
+static void dollar_expr_string(LexState* ls, expdesc* e) {
+    // $string -> $" xx $name ${expr} xx " | $'"$name"'
+    // lex 部分会把这些分割 <string> <name> { expr }，实际效果有些像调用函数。
+    luaX_next(ls);// skip $
+    int n = 0;
+    do {
+        if (ls->t.token == TK_STRING) {
+            if (ls->dollar_flag) {
+                if (tsslen(ls->t.seminfo.ts) > 0) {
+                    codestring(e, ls->t.seminfo.ts);
+                    luaK_exp2nextreg(ls->fs, e);
+                    n++;
+                }
+                luaX_next(ls);
+            }
+        }
+        else if (ls->t.token == TK_NAME) {
+            singlevar(ls, e);
+            luaK_exp2nextreg(ls->fs, e);
+            n++;
+        }
+        else if (ls->t.token == '{') {
+            int line = ls->linenumber;
+            expr(ls, e);
+            luaK_exp2nextreg(ls->fs, e);
+            check_match(ls, '}', '{', line);
+            n++;
+        }
+        else {
+            luaX_syntaxerror(ls, "unexpected symbol in <$string>");
+        }
+    } while (ls->dollar_flag);
+    lua_assert(ls->t.token == TK_STRING);// todo 需要优化下，现在不会报错，因为最后一定是string结束的。
+    if (tsslen(ls->t.seminfo.ts) > 0) {
+        codestring(e, ls->t.seminfo.ts);
+        luaK_exp2nextreg(ls->fs, e);
+        n++;
+    }
+    luaX_next(ls);
+
+    // 复用 OP_CONCAT 修改其实现，可能会有问题，先这么处理，如果有问题就增加个新指令好了。
+    FuncState *fs = ls->fs;
+    init_exp(e, VRELOC, luaK_codeABC(fs, OP_CONCAT, e->u.info, n, 0));
+}
+
+static void dollar_expr_func(LexState* ls, expdesc* e) {
+    // $function -> ${ block } | $(parlist){ block }
+    int line = ls->linenumber;
+    luaX_next(ls);// skip $ and get next token
+    FuncState new_fs;
+    BlockCnt bl;
+    new_fs.f = addprototype(ls);
+    new_fs.f->linedefined = line;
+    open_func(ls, &new_fs, &bl);
+    if (testnext(ls, '(')) {
+        parlist(ls);
+        checknext(ls, ')');
+    }
+    else { // empty params
+        // do nothing
+    }
+    line = ls->linenumber;
+    checknext(ls, '{');
+    statlist(ls);
+    new_fs.f->lastlinedefined = ls->linenumber;
+    check_match(ls, '}', '{', line);
+    codeclosure(ls, e);
+    close_func(ls);
+}
+
+static void dollar_expr(LexState* ls, expdesc* e) {
+    if (ls->dollar_flag) {
+        dollar_expr_string(ls, e);
+    }
+    else {
+        dollar_expr_func(ls, e);
+    }
+}
+
 
 static int explist (LexState *ls, expdesc *v) {
   /* explist -> expr { ',' expr } */
@@ -1181,6 +1272,10 @@ static void simpleexp (LexState *ls, expdesc *v) {
     case TK_FUNCTION: {
       luaX_next(ls);
       body(ls, v, 0, ls->linenumber);
+      return;
+    }
+    case '$': {
+      dollar_expr(ls, v);
       return;
     }
     default: {

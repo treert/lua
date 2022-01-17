@@ -65,6 +65,8 @@ typedef struct LexState {
   int current;  /* current character (charint) */
   int linenumber;  /* input line counter */
   int lastline;  /* line of last token 'consumed' */
+  int dollar_flag; /* $字符串标记，现在支持全局的一个，低位字节有3种主要状态：0,',"，【0x800比特位存储是否进入$解析模式】*/
+  int dollar_open_cnt; /* $字符串内部出现 ${ exp } 时计数{开启的次数，用来正确终止解析 */
   Token t;  /* current token */
   Token lookahead;  /* look ahead token */
   struct FuncState *fs;  /* current function (parser) */
