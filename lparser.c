@@ -139,12 +139,13 @@ static void check_match (LexState *ls, int what, int who, int where) {
   }
 }
 
-static TString* getstr_from_name_or_keyword(LexState* ls) {
+static TString* getstr_from_name_or_keyword(LexState* ls, int skip_token) {
     TString* ts;
     int token = ls->t.token;
     if (token == TK_NAME || 
         (token >= FIRST_RESERVED && token <= FIRST_RESERVED + NUM_RESERVED - 1)) {
         ts = ls->t.seminfo.ts;
+        if (skip_token) luaX_next(ls);
         return ts;
     }
     else {
@@ -177,6 +178,16 @@ static void codestring (expdesc *e, TString *s) {
 
 static void codename (LexState *ls, expdesc *e) {
   codestring(e, str_checkname(ls));
+}
+
+static void codenameorkeyword(LexState* ls, expdesc* e) {
+	TString* ts = getstr_from_name_or_keyword(ls, 1);
+	if (ts) {
+		codestring(e, ts);
+	}
+    else {
+        luaX_syntaxerror(ls,"expect <name> or keyword");
+    }
 }
 
 
@@ -827,7 +838,7 @@ static void fieldsel (LexState *ls, expdesc *v) {
   expdesc key;
   luaK_exp2anyregup(fs, v);
   luaX_next(ls);  /* skip the dot or colon */
-  codename(ls, &key);
+  codenameorkeyword(ls, &key);
   luaK_indexed(fs, v, &key);
 }
 
@@ -862,12 +873,13 @@ static void recfield (LexState *ls, ConsControl *cc) {
   FuncState *fs = ls->fs;
   int reg = ls->fs->freereg;
   expdesc tab, key, val;
-  if (ls->t.token == TK_NAME) {
-    checklimit(fs, cc->nh, MAX_INT, "items in a constructor");
-    codename(ls, &key);
+  if (ls->t.token == '[') {
+      yindex(ls, &key);
   }
-  else  /* ls->t.token == '[' */
-    yindex(ls, &key);
+  else { // Name or Kerword
+	  checklimit(fs, cc->nh, MAX_INT, "items in a constructor");
+	  codenameorkeyword(ls, &key);
+  }
   cc->nh++;
   checknext(ls, '=');
   tab = *cc->t;
@@ -914,24 +926,16 @@ static void listfield (LexState *ls, ConsControl *cc) {
 
 
 static void field (LexState *ls, ConsControl *cc) {
-  /* field -> listfield | recfield */
-  switch(ls->t.token) {
-    case TK_NAME: {  /* may be 'listfield' or 'recfield' */
-      if (luaX_lookahead(ls) != '=')  /* expression? */
-        listfield(ls, cc);
-      else
+    /* field -> listfield | recfield */
+    if (ls->t.token == '[') {
         recfield(ls, cc);
-      break;
     }
-    case '[': {
-      recfield(ls, cc);
-      break;
+    else if (getstr_from_name_or_keyword(ls, 0) && luaX_lookahead(ls) == '=') {
+        recfield(ls, cc);
     }
-    default: {
-      listfield(ls, cc);
-      break;
+    else {
+        listfield(ls, cc);
     }
-  }
 }
 
 
@@ -1230,7 +1234,7 @@ static void suffixedexp (LexState *ls, expdesc *v) {
       case ':': {  /* ':' NAME funcargs */
         expdesc key;
         luaX_next(ls);
-        codename(ls, &key);
+        codenameorkeyword(ls, &key);
         luaK_self(fs, v, &key);
         funcargs(ls, v, line);
         break;

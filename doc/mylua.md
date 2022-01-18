@@ -22,3 +22,16 @@ funcargs ::= $string | $function
 三目运算符?:加失败了，因为:在lua里是特殊的符号。
 
 ?? 也加失败了，短路逻辑比想象的要复杂呀。
+
+## keyword 特殊情况下可以当做普通的name
+```lua
+local tb = {
+	local = 1,
+}
+tb.end = 1
+function tb:for()
+	
+end
+
+print "tb.end = ok"
+```

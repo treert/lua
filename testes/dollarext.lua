@@ -15,3 +15,13 @@ local f2 = $(ff){return "f2 " .. ff()}
 assert(f2(f1) == "f2 f1")
 
 print "$function ok"
+
+local tb = {
+	local = 1,
+}
+tb.end = 1
+function tb:for()
+	
+end
+
+print "tb.end = ok"
