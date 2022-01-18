@@ -801,6 +801,7 @@ static int block_follow (LexState *ls, int withuntil) {
   switch (ls->t.token) {
     case TK_ELSE: case TK_ELSEIF:
     case TK_END: case TK_EOS:
+    case '}': // 为了支持 ${}
       return 1;
     case TK_UNTIL: return withuntil;
     default: return 0;
@@ -1023,6 +1024,7 @@ static void body (LexState *ls, expdesc *e, int ismethod, int line) {
 static void dollar_expr_string(LexState* ls, expdesc* e) {
     // $string -> $" xx $name ${expr} xx " | $'"$name"'
     // lex 部分会把这些分割 <string> <name> { expr }，实际效果有些像调用函数。
+    int dollar_line = ls->linenumber;
     luaX_next(ls);// skip $
     int n = 0;
     do {
@@ -1043,6 +1045,7 @@ static void dollar_expr_string(LexState* ls, expdesc* e) {
         }
         else if (ls->t.token == '{') {
             int line = ls->linenumber;
+            luaX_next(ls);// skip '{'
             expr(ls, e);
             luaK_exp2nextreg(ls->fs, e);
             check_match(ls, '}', '{', line);
@@ -1052,17 +1055,28 @@ static void dollar_expr_string(LexState* ls, expdesc* e) {
             luaX_syntaxerror(ls, "unexpected symbol in <$string>");
         }
     } while (ls->dollar_flag);
-    lua_assert(ls->t.token == TK_STRING);// todo 需要优化下，现在不会报错，因为最后一定是string结束的。
+    lua_assert(ls->t.token == TK_STRING);// 最后一定是string结束的
     if (tsslen(ls->t.seminfo.ts) > 0) {
         codestring(e, ls->t.seminfo.ts);
         luaK_exp2nextreg(ls->fs, e);
         n++;
     }
-    luaX_next(ls);
+    luaX_next(ls);// skip $string
 
-    // 复用 OP_CONCAT 修改其实现，可能会有问题，先这么处理，如果有问题就增加个新指令好了。
-    FuncState *fs = ls->fs;
-    init_exp(e, VRELOC, luaK_codeABC(fs, OP_CONCAT, e->u.info, n, 0));
+    // 复用 OP_CONCAT 修改其实现。
+    if (n > 0) {
+        FuncState *fs = ls->fs;
+        lua_assert(fs->freereg - 1 == e->u.info);
+        fs->freereg -= n - 1;// 留下一个结果
+        int base = fs->freereg - 1;
+        luaK_codeABC(fs, OP_CONCAT, base, n, 0);
+        init_exp(e, VNONRELOC, base);
+        luaK_fixline(fs, dollar_line);
+    }
+    else { // empty $string
+        codestring(e, luaS_newliteral(ls->L, ""));
+    }
+    
 }
 
 static void dollar_expr_func(LexState* ls, expdesc* e) {
@@ -1138,6 +1152,10 @@ static void funcargs (LexState *ls, expdesc *f, int line) {
       codestring(&args, ls->t.seminfo.ts);
       luaX_next(ls);  /* must use 'seminfo' before 'next' */
       break;
+    }
+    case '$': {
+        dollar_expr(ls, &args);
+        break;
     }
     default: {
       luaX_syntaxerror(ls, "function arguments expected");
@@ -1333,19 +1351,20 @@ static const struct {
   lu_byte left;  /* left priority for each binary operator */
   lu_byte right; /* right priority */
 } priority[] = {  /* ORDER OPR */
-   {10, 10}, {10, 10},           /* '+' '-' */
-   {11, 11}, {11, 11},           /* '*' '%' */
-   {14, 13},                  /* '^' (right associative) */
-   {11, 11}, {11, 11},           /* '/' '//' */
-   {6, 6}, {4, 4}, {5, 5},   /* '&' '|' '~' */
-   {7, 7}, {7, 7},           /* '<<' '>>' */
-   {9, 8},                   /* '..' (right associative) */
-   {3, 3}, {3, 3}, {3, 3},   /* ==, <, <= */
-   {3, 3}, {3, 3}, {3, 3},   /* ~=, >, >= */
-   {2, 2}, {1, 1}            /* and, or */
+   {20, 20}, {20, 20},           /* '+' '-' */
+   {21, 21}, {21, 21},           /* '*' '%' */
+   {24, 23},                  /* '^' (right associative) */
+   {21, 21}, {21, 21},           /* '/' '//' */
+   {16, 16}, {14, 14}, {15, 15},   /* '&' '|' '~' */
+   {17, 17}, {17, 17},           /* '<<' '>>' */
+   {19, 18},                   /* '..' (right associative) */
+   {13, 13}, {13, 13}, {13, 13},   /* ==, <, <= */
+   {13, 13}, {13, 13}, {13, 13},   /* ~=, >, >= */
+   {12, 12}, {11, 11},            /* and, or */
+   {1,1}                   /* ?? */
 };
 
-#define UNARY_PRIORITY	12  /* priority for unary operators */
+#define UNARY_PRIORITY	22  /* priority for unary operators */
 
 
 /*
@@ -1606,11 +1625,11 @@ static void repeatstat (LexState *ls, int line) {
   int repeat_init = luaK_getlabel(fs);
   BlockCnt bl1, bl2;
   enterblock(fs, &bl1, 1);  /* loop block */
-  insertcontinelabel(ls);// skip until condition
   enterblock(fs, &bl2, 0);  /* scope block */
   luaX_next(ls);  /* skip REPEAT */
   statlist(ls);
   check_match(ls, TK_UNTIL, TK_REPEAT, line);
+  insertcontinelabel(ls);// continue label, 很大的可能不允许跳到这儿来，主要是变量的作用域问题。
   condexit = cond(ls);  /* read condition (inside scope block) */
   leaveblock(fs);  /* finish scope */
   if (bl2.upval) {  /* upvalues? */

@@ -1623,6 +1623,7 @@ static void codeconcat (FuncState *fs, expdesc *e1, expdesc *e2, int line) {
   Instruction *ie2 = previousinstruction(fs);
   if (GET_OPCODE(*ie2) == OP_CONCAT) {  /* is 'e2' a concatenation? */
     int n = GETARG_B(*ie2);  /* # of elements concatenated in 'e2' */
+    // 这个实现就约定了所有从exp生成的最终指令都是把第一个值存在A中。
     lua_assert(e1->u.info + 1 == GETARG_A(*ie2));
     freeexp(fs, e2);
     SETARG_A(*ie2, e1->u.info);  /* correct first element ('e1') */

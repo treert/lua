@@ -59,13 +59,15 @@ print "while ok"
 i = 1
 c = 1
 repeat
+    local aa = i + 1
     if i%2 ~= 0 then 
         i = i + 1
         continue
     end
+    -- local bb = i
     c = c+i
     i = i+1
-until i > 10
+until aa > 10
 
 assert(a == c)
 

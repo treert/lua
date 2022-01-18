@@ -42,7 +42,7 @@ static const char *const luaX_tokens [] = {
     "end", "false", "for", "function", "goto", "if",
     "in", "local", "nil", "not", "or", "repeat",
     "return", "then", "true", "until", "while",
-    "//", "..", "...", "==", ">=", "<=", "~=",
+    "//", "..", "...", "==", ">=", "<=", "~=", "??",
     "<<", ">>", "::", "<eof>",
     "<number>", "<integer>", "<name>", "<string>"
 };
@@ -71,6 +71,8 @@ void luaX_init (lua_State *L) {
   int i;
   TString *e = luaS_newliteral(L, LUA_ENV);  /* create env name */
   luaC_fix(L, obj2gco(e));  /* never collect this name */
+  TString *empty = luaS_newliteral(L, "");
+  luaC_fix(L, obj2gco(empty));
   for (i=0; i<NUM_RESERVED; i++) {
     TString *ts = luaS_new(L, luaX_tokens[i]);
     luaC_fix(L, obj2gco(ts));  /* reserved words are never collected */
@@ -649,6 +651,12 @@ static int llex (LexState *ls, SemInfo *seminfo) {
         if (check_next1(ls, '=')) return TK_NE;  /* '~=' */
         else return '~';
       }
+      case '?': {
+        lexerror(ls,"dot not support ? symbol", '?');
+        next(ls);
+        if (check_next1(ls, '?')) return TK_QQUESTION; /* '??' */
+        else return '?';
+      }
       case ':': {
         next(ls);
         if (check_next1(ls, ':')) return TK_DBCOLON;  /* '::' */
@@ -682,14 +690,9 @@ static int llex (LexState *ls, SemInfo *seminfo) {
         else {  /* single-char tokens ('+', '*', '%', '{', '}', ...) */
           int c = ls->current;
           if (ls->dollar_flag) {
+            lua_assert(ls->dollar_open_cnt > 0);
             if('{' == c) ++ls->dollar_open_cnt;
-            else if ('}' == c) {
-              --ls->dollar_open_cnt;
-              if (ls->dollar_open_cnt < 0)
-              {
-                lexerror(ls, "miss matched '{' in <$string>", '}');
-              }
-            }
+            else if ('}' == c) --ls->dollar_open_cnt;
           }
           next(ls);
           return c;
