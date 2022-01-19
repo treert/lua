@@ -93,6 +93,7 @@ static const void *const disptab[NUM_OPCODES] = {
 &&L_OP_GEI,
 &&L_OP_TEST,
 &&L_OP_TESTSET,
+&& L_OP_TESTNIL,
 &&L_OP_CALL,
 &&L_OP_TAILCALL,
 &&L_OP_RETURN,

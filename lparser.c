@@ -1343,6 +1343,7 @@ static BinOpr getbinopr (int op) {
     case TK_GE: return OPR_GE;
     case TK_AND: return OPR_AND;
     case TK_OR: return OPR_OR;
+    case TK_QQUESTION: return OPR_QQ;
     default: return OPR_NOBINOPR;
   }
 }
@@ -1365,7 +1366,7 @@ static const struct {
    {13, 13}, {13, 13}, {13, 13},   /* ==, <, <= */
    {13, 13}, {13, 13}, {13, 13},   /* ~=, >, >= */
    {12, 12}, {11, 11},            /* and, or */
-   {1,1}                   /* ?? */
+   {2,1}                   /* ?? (right associative) */
 };
 
 #define UNARY_PRIORITY	22  /* priority for unary operators */

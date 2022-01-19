@@ -25,3 +25,11 @@ function tb:for()
 end
 
 print "tb.end = ok"
+
+local xxxx = nil
+assert((xxxx??123) == 123)
+assert((xxxx??xxxx??false or 123) == 123)
+assert((false??123) == false)
+assert((false or 123) == 123)
+
+print "?? ok"

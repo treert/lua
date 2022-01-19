@@ -36,7 +36,7 @@ typedef enum BinOpr {
   OPR_EQ, OPR_LT, OPR_LE,
   OPR_NE, OPR_GT, OPR_GE,
   /* logical operators */
-  OPR_AND, OPR_OR,
+  OPR_AND, OPR_OR, OPR_QQ,
   OPR_NOBINOPR
 } BinOpr;
 

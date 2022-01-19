@@ -1582,6 +1582,14 @@ void luaK_infix (FuncState *fs, BinOpr op, expdesc *v) {
       luaK_goiffalse(fs, v);  /* go ahead only if 'v' is false */
       break;
     }
+    case OPR_QQ: {// e1 ?? e2
+        // ?? 不好仿照 and or 来实现了，有点难。用自己的方式来实现。
+        // 写入同一个寄存器，?? 设计成右结合的，这样可以优化下连续??的情况。
+        luaK_exp2nextreg(fs, v);
+        fs->freereg--;// 回退一格，空出位置
+        v->u.info = condjump(fs, OP_TESTNIL, fs->freereg, 0, 0, 1);
+        break;
+    }
     case OPR_CONCAT: {
       luaK_exp2nextreg(fs, v);  /* operand must be on the stack */
       break;
@@ -1657,6 +1665,14 @@ void luaK_posfix (FuncState *fs, BinOpr opr,
       luaK_concat(fs, &e2->t, e1->t);
       *e1 = *e2;
       break;
+    }
+    case OPR_QQ: {// e1 ?? e2
+        lua_assert(GETARG_A(getinstruction(fs, e1)) == fs->freereg);
+        luaK_exp2nextreg(fs, e2);
+        int pc = e1->u.info;
+        fixjump(fs, pc, fs->pc);
+        *e1 = *e2;
+        break;
     }
     case OPR_CONCAT: {  /* e1 .. e2 */
       luaK_exp2nextreg(fs, e2);

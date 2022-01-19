@@ -1674,6 +1674,11 @@ void luaV_execute (lua_State *L, CallInfo *ci) {
         }
         vmbreak;
       }
+      vmcase(OP_TESTNIL) {
+          int cond = !ttisnil(s2v(ra));
+          docondjump();
+          vmbreak;
+      }
       vmcase(OP_CALL) {
         CallInfo *newci;
         int b = GETARG_B(i);

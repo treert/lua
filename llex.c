@@ -652,7 +652,7 @@ static int llex (LexState *ls, SemInfo *seminfo) {
         else return '~';
       }
       case '?': {
-        lexerror(ls,"dot not support ? symbol", '?');
+        //lexerror(ls,"dot not support ? symbol", '?');
         next(ls);
         if (check_next1(ls, '?')) return TK_QQUESTION; /* '??' */
         else return '?';
