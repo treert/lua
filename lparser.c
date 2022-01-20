@@ -992,6 +992,9 @@ static void parlist (LexState *ls) {
           isvararg = 1;
           break;
         }
+        case ')': {
+            break;// 允许 function(a,b,) end
+        }
         default: luaX_syntaxerror(ls, "<name> or '...' expected");
       }
     } while (!isvararg && testnext(ls, ','));
@@ -1141,7 +1144,14 @@ static void funcargs (LexState *ls, expdesc *f, int line) {
       if (ls->t.token == ')')  /* arg list is empty? */
         args.k = VVOID;
       else {
-        explist(ls, &args);
+        // explist(ls, &args); // 原来是这样的，改下，
+		expr(ls, &args);
+		while (testnext(ls, ',')) {
+            if(ls->t.token == ')') break;// 支持结尾多一个',', 例子：f(a,b,)
+			luaK_exp2nextreg(ls->fs, &args);
+			expr(ls, &args);
+		}
+        
         if (hasmultret(args.k))
           luaK_setmultret(fs, &args);
       }

@@ -50,3 +50,10 @@ end
 
 print "tb.end = ok"
 ```
+
+## 函数调用和函数定义时参数后面可以增加个一个,
+```lua
+-- 支持
+function f(a,b,) end
+f(1,2,)
+```
