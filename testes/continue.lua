@@ -15,6 +15,18 @@ end
 assert(a == b)
 print "fornum ok"
 
+local b = 1
+for i = 1, 10, 1 do
+    if i%2 ~= 0 then
+        goto continue
+    end
+    b = b+i
+    ::continue::
+end
+
+assert(a == b)
+print "fornum goto continue ok"
+
 b = 1
 local foritor = function (count)
     return function (tb,idx)

@@ -161,6 +161,13 @@ static TString *str_checkname (LexState *ls) {
   return ts;
 }
 
+static TString* str_check_name_and_keyword(LexState* ls) {
+    TString* ts = getstr_from_name_or_keyword(ls, 1);
+    if(ts == NULL)
+        luaX_syntaxerror(ls, "expect <name> or keyword");
+    return ts;
+}
+
 
 static void init_exp (expdesc *e, expkind k, int i) {
   e->f = e->t = NO_JUMP;
@@ -1545,7 +1552,7 @@ static int cond (LexState *ls) {
 static void gotostat (LexState *ls) {
   FuncState *fs = ls->fs;
   int line = ls->linenumber;
-  TString *name = str_checkname(ls);  /* label's name */
+  TString *name = str_check_name_and_keyword(ls);  /* label's name */
   Labeldesc *lb = findlabel(ls, name);
   if (lb == NULL)  /* no label? */
     /* forward jump; will be resolved when the label is declared */
@@ -2039,7 +2046,7 @@ static void statement (LexState *ls) {
     }
     case TK_DBCOLON: {  /* stat -> label */
       luaX_next(ls);  /* skip double colon */
-      labelstat(ls, str_checkname(ls), line);
+      labelstat(ls, str_check_name_and_keyword(ls), line);
       break;
     }
     case TK_RETURN: {  /* stat -> retstat */
