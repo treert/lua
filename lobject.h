@@ -558,6 +558,7 @@ typedef struct Proto {
   AbsLineInfo *abslineinfo;  /* idem */
   LocVar *locvars;  /* information about local variables (debug information) */
   TString  *source;  /* used for debug information */
+  TString **argnames;  /* 参数名列表，用于支持命名参数 */
   GCObject *gclist;
 } Proto;
 

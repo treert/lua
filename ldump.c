@@ -175,6 +175,12 @@ static void dumpDebug (DumpState *D, const Proto *f) {
     dumpString(D, f->upvalues[i].name);
 }
 
+static void dumpArgnames(DumpState* D, const Proto* f) {
+	int i;
+	for (i = 0; i < f->numparams; i++) {
+		dumpString(D, f->argnames[i]);
+	}
+}
 
 static void dumpFunction (DumpState *D, const Proto *f, TString *psource) {
   if (D->strip || f->source == psource)
@@ -191,8 +197,8 @@ static void dumpFunction (DumpState *D, const Proto *f, TString *psource) {
   dumpUpvalues(D, f);
   dumpProtos(D, f);
   dumpDebug(D, f);
+  dumpArgnames(D, f);
 }
-
 
 static void dumpHeader (DumpState *D) {
   dumpLiteral(D, LUA_SIGNATURE);

@@ -1008,6 +1008,16 @@ static void parlist (LexState *ls) {
   }
   adjustlocalvars(ls, nparams);
   f->numparams = cast_byte(fs->nactvar);
+  // 保存 arg name list
+  if (f->numparams > 0) {
+      f->argnames = luaM_newvectorchecked(ls->L, f->numparams, TString*);
+      int i;
+      for(i = 0; i < f->numparams; i++) {
+          LocVar* var = localdebuginfo(fs, i);
+          f->argnames[i] = var->varname;
+          luaC_objbarrier(ls->L, f, var->varname);
+      }
+  }
   if (isvararg)
     setvararg(fs, f->numparams);  /* declared vararg */
   luaK_reserveregs(fs, fs->nactvar);  /* reserve registers for parameters */

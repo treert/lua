@@ -57,3 +57,14 @@ print "tb.end = ok"
 function f(a,b,) end
 f(1,2,)
 ```
+
+## 命名参数支持
+```lua
+function f(a,b,c,d,*args) end
+
+f(1,b=2,b=3) -- 目前只支持到这一步，没有支持
+f(a=1,*{b=2,c=3})
+f(a=1,*{b=2},*{c=3})
+```
+希望像python一样支持`*args`，想到的实现是构建一个`table`，把命名参数放进去。
+然后发觉这种实现需要频繁的 new table ，觉得不好，先不支持。

@@ -580,7 +580,9 @@ static int traverseproto (global_State *g, Proto *f) {
     markobjectN(g, f->p[i]);
   for (i = 0; i < f->sizelocvars; i++)  /* mark local-variable names */
     markobjectN(g, f->locvars[i].varname);
-  return 1 + f->sizek + f->sizeupvalues + f->sizep + f->sizelocvars;
+  for (i = 0; i < f->numparams; i++) /* 命名参数的名字 */
+    markobject(g, f->argnames[i]);
+  return 1 + f->sizek + f->sizeupvalues + f->sizep + f->sizelocvars + f->numparams;
 }
 
 

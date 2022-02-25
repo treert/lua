@@ -252,6 +252,19 @@ static void loadDebug (LoadState *S, Proto *f) {
     f->upvalues[i].name = loadStringN(S, f);
 }
 
+static void loadArgnames(LoadState* S, Proto* f){
+	int i ,n;
+    n = f->numparams;
+    if (f->numparams > 0) {
+		f->argnames = luaM_newvectorchecked(S->L, n, TString*);
+		for (i = 0; i < n; i++) {
+			f->argnames[i] = loadString(S, f);
+		}
+    }
+    else {
+        f->argnames = NULL;
+    }
+}
 
 static void loadFunction (LoadState *S, Proto *f, TString *psource) {
   f->source = loadStringN(S, f);
@@ -267,8 +280,8 @@ static void loadFunction (LoadState *S, Proto *f, TString *psource) {
   loadUpvalues(S, f);
   loadProtos(S, f);
   loadDebug(S, f);
+  loadArgnames(S, f);
 }
-
 
 static void checkliteral (LoadState *S, const char *s, const char *msg) {
   char buff[sizeof(LUA_SIGNATURE) + sizeof(LUAC_DATA)]; /* larger than both */
