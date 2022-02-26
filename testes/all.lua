@@ -145,7 +145,8 @@ local olddofile = dofile
 local dofile = function (n, strip)
   showmem()
   local c = os.clock()
-  print(string.format("time: %g (+%g)", c - initclock, c - lastclock))
+  print(string.format("time: %g (+%g) file: %s", c - initclock, c - lastclock, n))
+  -- do return end
   lastclock = c
   report(n)
   local f = assert(loadfile(n))
@@ -173,6 +174,7 @@ if not _G._SkipSomeTest then
 end
 dofile('continue.lua')
 dofile('dollarext.lua')
+dofile("func-named-args.lua")
 dofile('gengc.lua')
 assert(dofile('locals.lua') == 5)
 dofile('constructs.lua')
@@ -287,6 +289,7 @@ if not usertests then
 end
 
 print("final OK !!!")
+io.stderr "final OK !!!"
 
 
 

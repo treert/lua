@@ -1,3 +1,4 @@
+print "$ Start\n"
 
 local s = "123"
 assert("123 nil" == $"$s $sss")
@@ -32,4 +33,4 @@ assert((xxxx??xxxx??false or 123) == 123)
 assert((false??123) == false)
 assert((false or 123) == 123)
 
-print "?? ok"
+print "$ OK\n"
