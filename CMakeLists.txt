@@ -24,6 +24,8 @@ LIST(REMOVE_ITEM LIB_SRC ./lua.c ./luac.c ./onelua.c)
 
 ADD_LIBRARY(lua ${LIB_SRC})
 
+add_definitions(-DLUAI_MAXCCALLS=128) # windows 上 cstack.lua 溢出报错
+
 ADD_EXECUTABLE(luaexec lua.c)
 target_link_libraries(luaexec lua)
 set_target_properties(luaexec PROPERTIES OUTPUT_NAME lua)
