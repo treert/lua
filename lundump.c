@@ -253,17 +253,18 @@ static void loadDebug (LoadState *S, Proto *f) {
 }
 
 static void loadArgnames(LoadState* S, Proto* f){
-	int i ,n;
-    n = f->numparams;
-    if (f->numparams > 0) {
-		f->argnames = luaM_newvectorchecked(S->L, n, TString*);
-		for (i = 0; i < n; i++) {
-			f->argnames[i] = loadString(S, f);
-		}
+  int i ,n;
+  n = f->numparams;
+  f->argnames = NULL;
+  if (n > 0) {
+    f->argnames = luaM_newvectorchecked(S->L, n, TString*);
+    for (i = 0; i < n; i++) {
+        f->argnames[i] = NULL; // @fxxk loadString 会触发gc，这儿不置空，后面加载会触发gc，然后访问也指针。
     }
-    else {
-        f->argnames = NULL;
+    for (i = 0; i < n; i++) {
+      f->argnames[i] = loadString(S, f);
     }
+  }
 }
 
 static void loadFunction (LoadState *S, Proto *f, TString *psource) {
@@ -273,6 +274,7 @@ static void loadFunction (LoadState *S, Proto *f, TString *psource) {
   f->linedefined = loadInt(S);
   f->lastlinedefined = loadInt(S);
   f->numparams = loadByte(S);
+  loadArgnames(S, f);
   f->is_vararg = loadByte(S);
   f->maxstacksize = loadByte(S);
   loadCode(S, f);
@@ -280,7 +282,6 @@ static void loadFunction (LoadState *S, Proto *f, TString *psource) {
   loadUpvalues(S, f);
   loadProtos(S, f);
   loadDebug(S, f);
-  loadArgnames(S, f);
 }
 
 static void checkliteral (LoadState *S, const char *s, const char *msg) {

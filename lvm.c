@@ -860,6 +860,46 @@ static void pushclosure (lua_State *L, Proto *p, UpVal **encup, StkId base,
   }
 }
 
+static void adjust_named_args(lua_State *L, StkId func, int all, int num) {
+  int tag = ttypetag(s2v(func));
+  num = num*2;// 命名参数是两个一组
+  if(tag == LUA_VLCL){
+    Proto* p = clLvalue(s2v(func))->p;
+    int fixparams = p->numparams;
+    L->top = func + all;
+    luaD_checkstack(L, fixparams); // func 可能失效了，不能再用了
+    StkId tmptop = L->top + fixparams;
+    StkId argbase = L->top - all + 1;
+    int arrnum = all - num - 1;
+    for(int i = 0; i < num; i++){
+      setobjs2s(L, tmptop-i-1, L->top-i-1);
+    }
+    TString** argnames = p->argnames;
+    for(int i = 0; i < fixparams; i++){
+      TString* argname = argnames[i];
+      for(int k = 2; k <= num; k+=2){
+        TString* inname = tsvalue(s2v(tmptop-k));
+        if(luaS_eqstr(argname, inname)){
+          setobjs2s(L, argbase+i, tmptop-k+1);
+          goto Next;
+        }
+      }
+      if(i >= arrnum){
+        setnilvalue(s2v(argbase+i));
+      }
+      Next:;
+    }
+    L->top = argbase + max(fixparams, arrnum);
+    for(StkId st = L->top; st < tmptop; st++){
+      setnilvalue(s2v(st)); // @om 好像也没有必要，毕竟设置了top
+    }
+  }
+  else{
+    // can not support c function, just delete named args now.
+    L->top = func + all - num;
+  }
+}
+
 
 /*
 ** finish execution of an opcode interrupted by a yield
@@ -1875,6 +1915,12 @@ void luaV_execute (lua_State *L, CallInfo *ci) {
         Proto *p = cl->p->p[GETARG_Bx(i)];
         halfProtect(pushclosure(L, p, cl->upvals, base, ra));
         checkGC(L, ra + 1);
+        vmbreak;
+      }
+      vmcase(OP_NAMEDARGPREP) {
+        int all = GETARG_B(i);
+        int num = GETARG_C(i);
+        Protect(adjust_named_args(L, ra, all, num));
         vmbreak;
       }
       vmcase(OP_VARARG) {

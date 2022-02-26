@@ -715,8 +715,9 @@ void luaX_next (LexState *ls) {
 
 
 int luaX_lookahead (LexState *ls) {
-  lua_assert(ls->lookahead.token == TK_EOS);
-  ls->lookahead.token = llex(ls, &ls->lookahead.seminfo);
+  //lua_assert(ls->lookahead.token == TK_EOS);
+  if(ls->lookahead.token == TK_EOS)
+    ls->lookahead.token = llex(ls, &ls->lookahead.seminfo);
   return ls->lookahead.token;
 }
 

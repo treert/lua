@@ -708,7 +708,7 @@ void luaK_setreturns (FuncState *fs, expdesc *e, int nresults) {
     lua_assert(e->k == VVARARG);
     SETARG_C(*pc, nresults + 1);
     SETARG_A(*pc, fs->freereg);
-    luaK_reserveregs(fs, 1);
+    luaK_reserveregs(fs, 1);// @om 哎，这儿的实现怎么不统一呀，增加一个reg是啥意思!!
   }
 }
 

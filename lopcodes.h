@@ -302,6 +302,8 @@ OP_SETLIST,/*	A B C k	R[A][C+i] := R[A+i], 1 <= i <= B		*/
 
 OP_CLOSURE,/*	A Bx	R[A] := closure(KPROTO[Bx])			*/
 
+OP_NAMEDARGPREP,/* A B C 调整命名参数, A 是函数本身, B 是参数的总数, C 是命名参数的对数 */
+
 OP_VARARG,/*	A C	R[A], R[A+1], ..., R[A+C-2] = vararg		*/
 
 OP_VARARGPREP,/*A	(adjust vararg parameters)			*/
@@ -378,7 +380,8 @@ LUAI_DDEC(const lu_byte luaP_opmodes[NUM_OPCODES];)
 /* "out top" (set top for next instruction) */
 #define isOT(i)  \
 	((testOTMode(GET_OPCODE(i)) && GETARG_C(i) == 0) || \
-          GET_OPCODE(i) == OP_TAILCALL)
+          GET_OPCODE(i) == OP_TAILCALL \
+          || GET_OPCODE(i) == OP_NAMEDARGPREP)
 
 /* "in top" (uses top from previous instruction) */
 #define isIT(i)		(testITMode(GET_OPCODE(i)) && GETARG_B(i) == 0)

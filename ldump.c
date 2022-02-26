@@ -190,6 +190,7 @@ static void dumpFunction (DumpState *D, const Proto *f, TString *psource) {
   dumpInt(D, f->linedefined);
   dumpInt(D, f->lastlinedefined);
   dumpByte(D, f->numparams);
+  dumpArgnames(D, f);
   dumpByte(D, f->is_vararg);
   dumpByte(D, f->maxstacksize);
   dumpCode(D, f);
@@ -197,7 +198,6 @@ static void dumpFunction (DumpState *D, const Proto *f, TString *psource) {
   dumpUpvalues(D, f);
   dumpProtos(D, f);
   dumpDebug(D, f);
-  dumpArgnames(D, f);
 }
 
 static void dumpHeader (DumpState *D) {
