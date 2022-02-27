@@ -50,7 +50,7 @@ assert(doit("error()") == nil)
 
 
 -- test common errors/errors that crashed in the past
-assert(doit("table.unpack({}, 1, n=2^30)"))
+assert(doit("table.unpack({}, 1, 2^30)")) -- @om 原来的例子有毒，用了个 n=2^30 的语法。
 assert(doit("a=math.sin()"))
 assert(not doit("tostring(1)") and doit("tostring()"))
 assert(doit"tonumber()")
@@ -119,7 +119,7 @@ checkmessage("a={}; do local a=1 end a:bbbb(3)", "method 'bbbb'")
 checkmessage("local a={}; a.bbbb(3)", "field 'bbbb'")
 assert(not string.find(doit"a={13}; local bbbb=1; a[bbbb](3)", "'bbbb'"))
 checkmessage("a={13}; local bbbb=1; a[bbbb](3)", "number")
-checkmessage("a=(1)..{}", "a table value")
+-- checkmessage("a=(1)..{}", "a table value") -- @om 现在支持任意的字符串连接
 
 -- calls
 checkmessage("local a; a(13)", "local 'a'")
@@ -309,9 +309,9 @@ checkmessage([[  -- tail call
 
 checkmessage([[collectgarbage("nooption")]], "invalid option")
 
-checkmessage([[x = print .. "a"]], "concatenate")
-checkmessage([[x = "a" .. false]], "concatenate")
-checkmessage([[x = {} .. 2]], "concatenate")
+-- checkmessage([[x = print .. "a"]], "concatenate") -- @om 
+-- checkmessage([[x = "a" .. false]], "concatenate") -- @om 
+-- checkmessage([[x = {} .. 2]], "concatenate") -- @om 
 
 checkmessage("getmetatable(io.stdin).__gc()", "no value")
 

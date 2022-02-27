@@ -594,6 +594,9 @@ static void PrintCode(const Proto* f)
    case OP_TESTSET:
 	printf("%d %d %d",a,b,isk);
 	break;
+   case OP_TESTNIL:
+	printf("%d %d", a, isk);
+	break;
    case OP_CALL:
 	printf("%d %d %d",a,b,c);
 	printf(COMMENT);
@@ -640,6 +643,9 @@ static void PrintCode(const Proto* f)
    case OP_CLOSURE:
 	printf("%d %d",a,bx);
 	printf(COMMENT "%p",VOID(f->p[bx]));
+	break;
+   case OP_NAMEDARGPREP:
+    printf("%d %d %d",a,b,c);
 	break;
    case OP_VARARG:
 	printf("%d %d",a,c);

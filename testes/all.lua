@@ -173,6 +173,9 @@ dofile('tpack.lua')
 if not _G._SkipSomeTest then
   assert(dofile('attrib.lua') == 27) -- 等win编译搞好后再说
 end
+dofile('continue.lua')
+dofile('dollarext.lua')
+dofile("func-named-args.lua")
 dofile('gengc.lua')
 assert(dofile('locals.lua') == 5)
 dofile('constructs.lua')

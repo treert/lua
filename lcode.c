@@ -726,7 +726,7 @@ void luaK_setreturns (FuncState *fs, expdesc *e, int nresults) {
     lua_assert(e->k == VVARARG);
     SETARG_C(*pc, nresults + 1);
     SETARG_A(*pc, fs->freereg);
-    luaK_reserveregs(fs, 1);
+    luaK_reserveregs(fs, 1);// @om 哎，这儿的实现怎么不统一呀，增加一个reg是啥意思!!
   }
 }
 
@@ -1600,6 +1600,14 @@ void luaK_infix (FuncState *fs, BinOpr op, expdesc *v) {
       luaK_goiffalse(fs, v);  /* go ahead only if 'v' is false */
       break;
     }
+    case OPR_QQ: {// e1 ?? e2
+        // ?? 不好仿照 and or 来实现了，有点难。用自己的方式来实现。
+        // 写入同一个寄存器，?? 设计成右结合的，这样可以优化下连续??的情况。
+        luaK_exp2nextreg(fs, v);
+        fs->freereg--;// 回退一格，空出位置
+        v->u.info = condjump(fs, OP_TESTNIL, fs->freereg, 0, 0, 1);
+        break;
+    }
     case OPR_CONCAT: {
       luaK_exp2nextreg(fs, v);  /* operand must be on the stack */
       break;
@@ -1641,6 +1649,7 @@ static void codeconcat (FuncState *fs, expdesc *e1, expdesc *e2, int line) {
   Instruction *ie2 = previousinstruction(fs);
   if (GET_OPCODE(*ie2) == OP_CONCAT) {  /* is 'e2' a concatenation? */
     int n = GETARG_B(*ie2);  /* # of elements concatenated in 'e2' */
+    // 这个实现就约定了所有从exp生成的最终指令都是把第一个值存在A中。
     lua_assert(e1->u.info + 1 == GETARG_A(*ie2));
     freeexp(fs, e2);
     SETARG_A(*ie2, e1->u.info);  /* correct first element ('e1') */
@@ -1674,6 +1683,14 @@ void luaK_posfix (FuncState *fs, BinOpr opr,
       luaK_concat(fs, &e2->t, e1->t);
       *e1 = *e2;
       break;
+    }
+    case OPR_QQ: {// e1 ?? e2
+        lua_assert(GETARG_A(getinstruction(fs, e1)) == fs->freereg);
+        luaK_exp2nextreg(fs, e2);
+        int pc = e1->u.info;
+        fixjump(fs, pc, fs->pc);
+        *e1 = *e2;
+        break;
     }
     case OPR_CONCAT: {  /* e1 .. e2 */
       luaK_exp2nextreg(fs, e2);
