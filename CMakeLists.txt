@@ -15,7 +15,9 @@ project(${PROJECT_NAME})
 #   SET(CMAKE_INSTALL_PREFIX "C:/MyExe" CACHE PATH "my exe dir")
 # ENDIF(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
 
-AUX_SOURCE_DIRECTORY(. ALL_SRC)
+file (GLOB ALL_SRC *.h *.c)
+
+# AUX_SOURCE_DIRECTORY(. ALL_SRC)
 INCLUDE_DIRECTORIES(.)
 
 # remove the lua.c/luac.c from teh all file lists
