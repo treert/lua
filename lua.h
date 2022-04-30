@@ -61,6 +61,7 @@ typedef struct lua_State lua_State;
 ** basic types
 */
 #define LUA_TNONE		(-1)
+#define LUA_TNONE_BYTE 0xFF   // LUA_TNONE 定义成-1,不好用呀
 
 #define LUA_TNIL		0
 #define LUA_TBOOLEAN		1

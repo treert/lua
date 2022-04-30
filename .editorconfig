@@ -1,0 +1,13 @@
+# Rules in this file were initially inferred by Visual Studio IntelliCode from the C:\Users\om\Desktop\MyGit\github\lua\build codebase based on best match to current usage at 2022/4/30
+# You can modify the rules from these initially generated values to suit your own policies
+# You can learn more about editorconfig here: https://docs.microsoft.com/en-us/visualstudio/ide/editorconfig-code-style-settings-reference
+# editorconfig顶级配置文件,停止向上寻找配置文件
+root = true
+
+# 匹配所有文件
+[*]
+# 缩进样式=空格     【space:空格，tab:tab键】
+indent_style = space
+
+[*.{c,h}]
+indent_size = 2

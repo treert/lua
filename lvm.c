@@ -633,10 +633,10 @@ static void copy2buff (StkId top, int n, char *buff) {
 LUALIB_API const char* (luaL_tolstring)(lua_State* L, int idx, size_t* len);
 // luaB_tostring 复制过来了
 static int my_tostring_func(lua_State* L) {
-    lua_assert(lua_type(L, arg) != LUA_TNONE);
+  lua_assert(lua_type(L, arg) != LUA_TNONE);
 	//luaL_checkany(L, 1);
-	luaL_tolstring(L, 1, NULL);
-	return 1;
+  luaL_tolstring(L, 1, NULL);
+  return 1;
 }
 
 // 
@@ -866,38 +866,60 @@ static void adjust_named_args(lua_State *L, StkId func, int all, int num) {
   num = num*2;// 命名参数是两个一组
   if(tag == LUA_VLCL){
     Proto* p = clLvalue(s2v(func))->p;
-    int fixparams = p->numparams;
-    L->top = func + all;
-    luaD_checkstack(L, fixparams); // func 可能失效了，不能再用了
-    StkId tmptop = L->top + fixparams;
-    StkId argbase = L->top - all + 1;
-    int arrnum = all - num - 1;
-    for(int i = 0; i < num; i++){
-      setobjs2s(L, tmptop-i-1, L->top-i-1);
-    }
-    TString** argnames = p->argnames;
-    for(int i = 0; i < fixparams; i++){
-      TString* argname = argnames[i];
-      for(int k = 2; k <= num; k+=2){
-        TString* inname = tsvalue(s2v(tmptop-k));
-        if(luaS_eqstr(argname, inname)){
-          setobjs2s(L, argbase+i, tmptop-k+1);
-          goto Next;
+    int fixparams = p->numparams;// 函数的固定参数个数
+    int arrnum = all - num;// 数组参数数量
+    TString** argnames = p->argnames;// 参数名数组
+    StkId argbase = func + 1;
+    StkId namedbase = argbase + arrnum;
+    if (arrnum >= fixparams) {
+      for (int i = 0; i < fixparams; i++) {
+        TString* argname = argnames[i];
+        for (int k = num-2; k >= 0; k -= 2) {
+          TString* inname = tsvalue(s2v(namedbase + k));
+          if (luaS_eqstr(argname, inname)) {
+            setobjs2s(L, argbase + i, namedbase + k + 1);
+            break;
+          }
         }
       }
-      if(i >= arrnum){
-        setnilvalue(s2v(argbase+i));
+    }
+    else{
+      // 扩展堆栈
+      L->top = argbase + all;
+      luaD_checkstack(L, fixparams - all);// 这之后，func 可能失效了，不能用
+      argbase = L->top - all;
+      namedbase = argbase + arrnum;
+
+      TValue namedvalues[256];
+      for (int i = 0; i < fixparams; i++){
+        TString* argname = argnames[i];
+        for (int k = num - 2; k >= 0; k -= 2) {
+          TString* inname = tsvalue(s2v(namedbase + k));
+          if (luaS_eqstr(argname, inname)) {
+            setobj(NULL, &namedvalues[i], s2v(namedbase + k + 1));
+            goto NextArg;
+          }
+        }
+        settt_(&namedvalues[i], LUA_TNONE_BYTE);
+        NextArg:;
       }
-      Next:;
+      for (int i = 0; i < fixparams; i++)
+      {
+        if(rawtt(&namedvalues[i]) != LUA_TNONE_BYTE){
+          setobj(NULL, s2v(argbase + i), &namedvalues[i]);
+        }
+        else{
+          if (i >= arrnum) {
+            setnilvalue(s2v(argbase + i));
+          }
+        }
+      }
     }
-    L->top = argbase + max(fixparams, arrnum);
-    for(StkId st = L->top; st < tmptop; st++){
-      setnilvalue(s2v(st)); // @om 好像也没有必要，毕竟设置了top
-    }
+    L->top = argbase + fixparams;
   }
   else{
     // can not support c function, just delete named args now.
-    L->top = func + all - num;
+    L->top = func + 1 + all - num;
   }
 }
 

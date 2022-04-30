@@ -1243,7 +1243,7 @@ static void funcargs(LexState* ls, expdesc* f, int line) {
   base = f->u.info;  /* base register for call */
   if (namedargcnt) {
       nparams = -1;
-      luaK_codeABC(fs, OP_NAMEDARGPREP, base, fs->freereg - base, namedargcnt);
+      luaK_codeABC(fs, OP_NAMEDARGPREP, base, fs->freereg - base - 1, namedargcnt);
   }
   else if (nparams != -1) { // 可能有self参数
     nparams = fs->freereg - (base + 1);
