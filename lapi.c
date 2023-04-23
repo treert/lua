@@ -241,6 +241,7 @@ l_sinline void reverse (lua_State *L, StkId from, StkId to) {
 /*
 ** Let x = AB, where A is a prefix of length 'n'. Then,
 ** rotate x n == BA. But BA == (A^r . B^r)^r.
+*  doc@om when n < 0, abs(n) is len(A); or (n) is len(B)
 */
 LUA_API void lua_rotate (lua_State *L, int idx, int n) {
   StkId p, t, m;
