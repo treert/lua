@@ -344,41 +344,42 @@ else
   for i = 1, 10 do assert(u3[i] == i) end
 end
 
+-- mod@om start
+-- t.__concat = function (a,b,c)
+--   assert(c == nil)
+--   if type(a) == 'table' then a = a.val end
+--   if type(b) == 'table' then b = b.val end
+--   if A then return a..b
+--   else
+--     return setmetatable({val=a..b}, t)
+--   end
+-- end
 
-t.__concat = function (a,b,c)
-  assert(c == nil)
-  if type(a) == 'table' then a = a.val end
-  if type(b) == 'table' then b = b.val end
-  if A then return a..b
-  else
-    return setmetatable({val=a..b}, t)
-  end
-end
+-- c = {val="c"}; setmetatable(c, t)
+-- d = {val="d"}; setmetatable(d, t)
 
-c = {val="c"}; setmetatable(c, t)
-d = {val="d"}; setmetatable(d, t)
+-- A = true
+-- assert(c..d == 'cd')
+-- assert(0 .."a".."b"..c..d.."e".."f"..(5+3).."g" == "0abcdef8g")
 
-A = true
-assert(c..d == 'cd')
-assert(0 .."a".."b"..c..d.."e".."f"..(5+3).."g" == "0abcdef8g")
-
-A = false
-assert((c..d..c..d).val == 'cdcd')
-x = c..d
-assert(getmetatable(x) == t and x.val == 'cd')
-x = 0 .."a".."b"..c..d.."e".."f".."g"
-assert(x.val == "0abcdefg")
+-- A = false
+-- assert((c..d..c..d).val == 'cdcd')
+-- x = c..d
+-- assert(getmetatable(x) == t and x.val == 'cd')
+-- x = 0 .."a".."b"..c..d.."e".."f".."g"
+-- assert(x.val == "0abcdefg")
 
 
--- concat metamethod x numbers (bug in 5.1.1)
-c = {}
-local x
-setmetatable(c, {__concat = function (a,b)
-  assert(type(a) == "number" and b == c or type(b) == "number" and a == c)
-  return c
-end})
-assert(c..5 == c and 5 .. c == c)
-assert(4 .. c .. 5 == c and 4 .. 5 .. 6 .. 7 .. c == c)
+-- -- concat metamethod x numbers (bug in 5.1.1)
+-- c = {}
+-- local x
+-- setmetatable(c, {__concat = function (a,b)
+--   assert(type(a) == "number" and b == c or type(b) == "number" and a == c)
+--   return c
+-- end})
+-- assert(c..5 == c and 5 .. c == c)
+-- assert(4 .. c .. 5 == c and 4 .. 5 .. 6 .. 7 .. c == c)
+-- mod@om end
 
 
 -- test comparison compatibilities

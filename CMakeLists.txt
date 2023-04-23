@@ -15,12 +15,17 @@ project(${PROJECT_NAME})
 #   SET(CMAKE_INSTALL_PREFIX "C:/MyExe" CACHE PATH "my exe dir")
 # ENDIF(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
 
-AUX_SOURCE_DIRECTORY(. ALL_SRC)
+file (GLOB ALL_SRC *.h *.c)
+# message(DEBUG "ALL_SRC=${ALL_SRC}")
+
+# AUX_SOURCE_DIRECTORY(. ALL_SRC)
 INCLUDE_DIRECTORIES(.)
 
 # remove the lua.c/luac.c from teh all file lists
 SET(LIB_SRC ${ALL_SRC})
-LIST(REMOVE_ITEM LIB_SRC ./lua.c ./luac.c ./onelua.c)
+# https://stackoverflow.com/questions/15550777/how-do-i-exclude-a-single-file-from-a-cmake-fileglob-pattern
+# LIST(REMOVE_ITEM LIB_SRC ./lua.c ./luac.c ./onelua.c)
+list(FILTER LIB_SRC EXCLUDE REGEX ".*[/\](lua|luac|onelua).c")
 
 ADD_LIBRARY(lua ${LIB_SRC})
 

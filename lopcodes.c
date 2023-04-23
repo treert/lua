@@ -85,6 +85,7 @@ LUAI_DDEF const lu_byte luaP_opmodes[NUM_OPCODES] = {
  ,opmode(0, 0, 0, 1, 0, iABC)		/* OP_GEI */
  ,opmode(0, 0, 0, 1, 0, iABC)		/* OP_TEST */
  ,opmode(0, 0, 0, 1, 1, iABC)		/* OP_TESTSET */
+ ,opmode(0, 0, 0, 1, 0, iABC)		/* OP_TESTNIL add@om */
  ,opmode(0, 1, 1, 0, 1, iABC)		/* OP_CALL */
  ,opmode(0, 1, 1, 0, 1, iABC)		/* OP_TAILCALL */
  ,opmode(0, 0, 1, 0, 0, iABC)		/* OP_RETURN */
@@ -97,6 +98,7 @@ LUAI_DDEF const lu_byte luaP_opmodes[NUM_OPCODES] = {
  ,opmode(0, 0, 0, 0, 1, iABx)		/* OP_TFORLOOP */
  ,opmode(0, 0, 1, 0, 0, iABC)		/* OP_SETLIST */
  ,opmode(0, 0, 0, 0, 1, iABx)		/* OP_CLOSURE */
+ ,opmode(0, 1, 0, 0, 0, iABC)		/* OP_NAMEDARGPREP add@om */
  ,opmode(0, 1, 0, 0, 1, iABC)		/* OP_VARARG */
  ,opmode(0, 0, 1, 0, 1, iABC)		/* OP_VARARGPREP */
  ,opmode(0, 0, 0, 0, 0, iAx)		/* OP_EXTRAARG */

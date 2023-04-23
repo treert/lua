@@ -260,6 +260,7 @@ Proto *luaF_newproto (lua_State *L) {
   f->linedefined = 0;
   f->lastlinedefined = 0;
   f->source = NULL;
+  f->argnames = NULL;// add@om
   return f;
 }
 
@@ -272,6 +273,7 @@ void luaF_freeproto (lua_State *L, Proto *f) {
   luaM_freearray(L, f->abslineinfo, f->sizeabslineinfo);
   luaM_freearray(L, f->locvars, f->sizelocvars);
   luaM_freearray(L, f->upvalues, f->sizeupvalues);
+  luaM_freearray(L, f->argnames, f->numparams);// add@om
   luaM_free(L, f);
 }
 

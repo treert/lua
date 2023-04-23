@@ -290,27 +290,26 @@ assert(a == print and c == 1)
 
 
 -- testing __concat
+-- mod@om start
+-- a = setmetatable({x="u"}, {__concat = function (a,b) return a.x..'.'..b.x end})
+-- x,y = T.testC([[
+--   pushnum 5
+--   pushvalue 2;
+--   pushvalue 2;
+--   concat 2;
+--   pushvalue -2;
+--   return 2;
+-- ]], a, a)
+-- assert(x == a..a and y == 5)
 
-a = setmetatable({x="u"}, {__concat = function (a,b) return a.x..'.'..b.x end})
-x,y = T.testC([[
-  pushnum 5
-  pushvalue 2;
-  pushvalue 2;
-  concat 2;
-  pushvalue -2;
-  return 2;
-]], a, a)
-assert(x == a..a and y == 5)
+-- -- concat with 0 elements
+-- assert(T.testC("concat 0; return 1") == "")
 
--- concat with 0 elements
-assert(T.testC("concat 0; return 1") == "")
-
--- concat with 1 element
-assert(T.testC("concat 1; return 1", "xuxu") == "xuxu")
-
-
+-- -- concat with 1 element
+-- assert(T.testC("concat 1; return 1", "xuxu") == "xuxu")
 
 -- testing lua_is
+-- mod@om end
 
 function B(x) return x and 1 or 0 end
 

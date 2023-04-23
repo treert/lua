@@ -630,12 +630,72 @@ static void copy2buff (StkId top, int n, char *buff) {
   } while (--n > 0);
 }
 
+// add@om
+LUALIB_API const char* (luaL_tolstring)(lua_State* L, int idx, size_t* len);
+// luaB_tostring 复制过来了
+static int my_tostring_func(lua_State* L) {
+  lua_assert(lua_type(L, arg) != LUA_TNONE);
+	//luaL_checkany(L, 1);
+  luaL_tolstring(L, 1, NULL);
+  return 1;
+}
+
+// add@om
+// 下面的实现模式抄自 luaT_callTMres,【不支持协程打断】
+// PS1: 有些想通过全局表去获取`tostring`，思索了下，放弃了。
+// PS2: __tostring 也没定义在元表里？？ 还想参考下 luaL_tolstring 的呢。
+static void call_my_tostring(lua_State* L, StkId res) {
+    StkId top = L->top;
+	ptrdiff_t result = savestack(L, res);
+	setfvalue(s2v(top), my_tostring_func);
+	setobjs2s(L, top + 1, res);
+	L->top += 2;
+    // luaV_finishOp 里对 OP_CONCAT 的处理写死了返回的地址。不能支持 luaD_call
+	luaD_callnoyield(L, top, 1);
+	res = restorestack(L, result);
+	setobjs2s(L, res, --L->top);  /* move result to its place */
+}
+
+/* replace@om
+** 替换掉实现，concat from 'L->top - total' up to 'L->top - 1'。
+** 使用近似tostring的实现来格式化，具体看 luaL_tolstring 。
+*/
+void luaV_concat(lua_State* L, int total) {
+    lua_assert(total > 0);
+    StkId base = L->top - total;
+    // convert to string
+    for (int i = 0; i < total; i++) {
+        StkId res = base + i;
+        if (!tostring(L, s2v(res))) {
+            call_my_tostring(L, res);
+        }
+    }
+    // concat string
+    size_t len = vslen(s2v(base));
+	for (int i = 1; i < total; i++) {
+        len += vslen(s2v(base + i));
+		if (l_unlikely(len >= (MAX_SIZE / sizeof(char))))
+			luaG_runerror(L, "string length overflow");
+	}
+    TString* ts;
+	if (len <= LUAI_MAXSHORTLEN) {  /* is result a short string? */
+		char buff[LUAI_MAXSHORTLEN];
+		copy2buff(L->top, total, buff);  /* copy strings to buffer */
+		ts = luaS_newlstr(L, buff, len);
+	}
+	else {  /* long string; copy strings directly to final result */
+		ts = luaS_createlngstrobj(L, len);
+		copy2buff(L->top, total, getstr(ts));
+	}
+	setsvalue2s(L, base, ts);  /* create result */
+    L->top -= total - 1;/* popped 'total' strings and pushed one */
+}
 
 /*
 ** Main operation for concatenation: concat 'total' values in the stack,
 ** from 'L->top - total' up to 'L->top - 1'.
 */
-void luaV_concat (lua_State *L, int total) {
+void luaV_concat_old (lua_State *L, int total) {
   if (total == 1)
     return;  /* "all" values already concatenated */
   do {
@@ -802,6 +862,69 @@ static void pushclosure (lua_State *L, Proto *p, UpVal **encup, StkId base,
   }
 }
 
+// add@om
+static void adjust_named_args(lua_State *L, StkId func, int all, int num) {
+  int tag = ttypetag(s2v(func));
+  num = num*2;// 命名参数是两个一组
+  if(tag == LUA_VLCL){
+    Proto* p = clLvalue(s2v(func))->p;
+    int fixparams = p->numparams;// 函数的固定参数个数
+    int arrnum = all - num;// 数组参数数量
+    TString** argnames = p->argnames;// 参数名数组
+    StkId argbase = func + 1;
+    StkId namedbase = argbase + arrnum;
+    if (arrnum >= fixparams) {
+      for (int i = 0; i < fixparams; i++) {
+        TString* argname = argnames[i];
+        for (int k = num-2; k >= 0; k -= 2) {
+          TString* inname = tsvalue(s2v(namedbase + k));
+          if (luaS_eqstr(argname, inname)) {
+            setobjs2s(L, argbase + i, namedbase + k + 1);
+            break;
+          }
+        }
+      }
+    }
+    else{
+      // 扩展堆栈
+      L->top = argbase + all;
+      luaD_checkstack(L, fixparams - all);// 这之后，func 可能失效了，不能用
+      argbase = L->top - all;
+      namedbase = argbase + arrnum;
+
+      TValue namedvalues[256];
+      for (int i = 0; i < fixparams; i++){
+        TString* argname = argnames[i];
+        for (int k = num - 2; k >= 0; k -= 2) {
+          TString* inname = tsvalue(s2v(namedbase + k));
+          if (luaS_eqstr(argname, inname)) {
+            setobj(NULL, &namedvalues[i], s2v(namedbase + k + 1));
+            goto NextArg;
+          }
+        }
+        settt_(&namedvalues[i], LUA_TNONE_BYTE);
+        NextArg:;
+      }
+      for (int i = 0; i < fixparams; i++)
+      {
+        if(rawtt(&namedvalues[i]) != LUA_TNONE_BYTE){
+          setobj(NULL, s2v(argbase + i), &namedvalues[i]);
+        }
+        else{
+          if (i >= arrnum) {
+            setnilvalue(s2v(argbase + i));
+          }
+        }
+      }
+    }
+    L->top = argbase + fixparams;
+  }
+  else{
+    // can not support c function, just delete named args now.
+    L->top = func + 1 + all - num;
+  }
+}
+
 
 /*
 ** finish execution of an opcode interrupted by a yield
@@ -843,6 +966,8 @@ void luaV_finishOp (lua_State *L) {
       StkId top = L->top - 1;  /* top when 'luaT_tryconcatTM' was called */
       int a = GETARG_A(inst);      /* first element to concatenate */
       int total = cast_int(top - 1 - (base + a));  /* yet to concatenate */
+      // 写死了返回值偏移，不支持 call_my_tostring 了。
+      // todo@om inst的 C 没有使用，可以保存下返回的reg偏移。
       setobjs2s(L, top - 2, top);  /* put TM result in proper position */
       L->top = top - 1;  /* top is one after last element (at top-2) */
       luaV_concat(L, total);  /* concat them (may yield again) */
@@ -1625,6 +1750,12 @@ void luaV_execute (lua_State *L, CallInfo *ci) {
         }
         vmbreak;
       }
+      // add@om
+      vmcase(OP_TESTNIL) {
+          int cond = !ttisnil(s2v(ra));
+          docondjump();
+          vmbreak;
+      }
       vmcase(OP_CALL) {
         CallInfo *newci;
         int b = GETARG_B(i);
@@ -1813,6 +1944,13 @@ void luaV_execute (lua_State *L, CallInfo *ci) {
         Proto *p = cl->p->p[GETARG_Bx(i)];
         halfProtect(pushclosure(L, p, cl->upvals, base, ra));
         checkGC(L, ra + 1);
+        vmbreak;
+      }
+      // add@om
+      vmcase(OP_NAMEDARGPREP) {
+        int all = GETARG_B(i);
+        int num = GETARG_C(i);
+        Protect(adjust_named_args(L, ra, all, num));
         vmbreak;
       }
       vmcase(OP_VARARG) {

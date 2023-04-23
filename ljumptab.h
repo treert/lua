@@ -93,6 +93,7 @@ static const void *const disptab[NUM_OPCODES] = {
 &&L_OP_GEI,
 &&L_OP_TEST,
 &&L_OP_TESTSET,
+&&L_OP_TESTNIL,// add@om
 &&L_OP_CALL,
 &&L_OP_TAILCALL,
 &&L_OP_RETURN,
@@ -105,6 +106,7 @@ static const void *const disptab[NUM_OPCODES] = {
 &&L_OP_TFORLOOP,
 &&L_OP_SETLIST,
 &&L_OP_CLOSURE,
+&&L_OP_NAMEDARGPREP,// add@om
 &&L_OP_VARARG,
 &&L_OP_VARARGPREP,
 &&L_OP_EXTRAARG

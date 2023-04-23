@@ -30,13 +30,14 @@
 * grep "ORDER RESERVED"
 */
 enum RESERVED {
+  // add@om contine and ??
   /* terminal symbols denoted by reserved words */
-  TK_AND = FIRST_RESERVED, TK_BREAK,
+  TK_AND = FIRST_RESERVED, TK_BREAK, TK_CONTINUE,
   TK_DO, TK_ELSE, TK_ELSEIF, TK_END, TK_FALSE, TK_FOR, TK_FUNCTION,
   TK_GOTO, TK_IF, TK_IN, TK_LOCAL, TK_NIL, TK_NOT, TK_OR, TK_REPEAT,
   TK_RETURN, TK_THEN, TK_TRUE, TK_UNTIL, TK_WHILE,
   /* other terminal symbols */
-  TK_IDIV, TK_CONCAT, TK_DOTS, TK_EQ, TK_GE, TK_LE, TK_NE,
+  TK_IDIV, TK_CONCAT, TK_DOTS, TK_EQ, TK_GE, TK_LE, TK_NE, TK_QQUESTION,
   TK_SHL, TK_SHR,
   TK_DBCOLON, TK_EOS,
   TK_FLT, TK_INT, TK_NAME, TK_STRING
@@ -65,6 +66,8 @@ typedef struct LexState {
   int current;  /* current character (charint) */
   int linenumber;  /* input line counter */
   int lastline;  /* line of last token 'consumed' */
+  int dollar_flag; /* add@om $字符串标记，现在支持全局的一个，低位字节有3种主要状态：0,',"，【0x800比特位存储是否进入$解析模式】*/
+  int dollar_open_cnt; /* add@om $字符串内部出现 ${ exp } 时计数{开启的次数，用来正确终止解析 */
   Token t;  /* current token */
   Token lookahead;  /* look ahead token */
   struct FuncState *fs;  /* current function (parser) */

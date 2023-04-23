@@ -27,6 +27,13 @@
 */
 #define MAXSTRTB	cast_int(luaM_limitN(MAX_INT, TString*))
 
+/* add@om?
+** equality for all strings
+*/
+int luaS_eqstr(TString* a, TString* b) {
+    return (a == b) || 
+        (a->tt == LUA_VLNGSTR && b->tt == LUA_VLNGSTR && luaS_eqlngstr(a, b));
+}
 
 /*
 ** equality for long strings

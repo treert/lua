@@ -796,11 +796,12 @@ local mt = {
                         return val(a) | val(b) end,
   __bxor = function(a,b) coroutine.yield(nil, "bxor");
                          return val(a) ~ val(b) end,
-
-  __concat = function(a,b)
-               coroutine.yield(nil, "concat");
-               return val(a) .. val(b)
-             end,
+  -- mod@om start
+  -- __concat = function(a,b)
+  --              coroutine.yield(nil, "concat");
+  --              return val(a) .. val(b)
+  --            end,
+  -- mod@om end
   __index = function (t,k) coroutine.yield(nil, "idx"); return t.k[k] end,
   __newindex = function (t,k,v) coroutine.yield(nil, "nidx"); t.k[k] = v end,
 }
@@ -882,14 +883,15 @@ assert(run(function () return 1 << a end, {"shl"}) == 1 << 10)
 assert(run(function () return 2 ~ a end, {"bxor"}) == 2 ~ 10)
 
 
-assert(run(function () return a..b end, {"concat"}) == "1012")
+-- mod@om start
+-- assert(run(function () return a..b end, {"concat"}) == "1012")
 
-assert(run(function() return a .. b .. c .. a end,
-       {"concat", "concat", "concat"}) == "1012hello10")
+-- assert(run(function() return a .. b .. c .. a end,
+--        {"concat", "concat", "concat"}) == "1012hello10")
 
-assert(run(function() return "a" .. "b" .. a .. "c" .. c .. b .. "x" end,
-       {"concat", "concat", "concat"}) == "ab10chello12x")
-
+-- assert(run(function() return "a" .. "b" .. a .. "c" .. c .. b .. "x" end,
+--        {"concat", "concat", "concat"}) == "ab10chello12x")
+-- mod@om end
 
 do   -- a few more tests for comparison operators
   local mt1 = {

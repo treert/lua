@@ -175,6 +175,13 @@ static void dumpDebug (DumpState *D, const Proto *f) {
     dumpString(D, f->upvalues[i].name);
 }
 
+// add@om
+static void dumpArgnames(DumpState* D, const Proto* f) {
+	int i;
+	for (i = 0; i < f->numparams; i++) {
+		dumpString(D, f->argnames[i]);
+	}
+}
 
 static void dumpFunction (DumpState *D, const Proto *f, TString *psource) {
   if (D->strip || f->source == psource)
@@ -184,6 +191,7 @@ static void dumpFunction (DumpState *D, const Proto *f, TString *psource) {
   dumpInt(D, f->linedefined);
   dumpInt(D, f->lastlinedefined);
   dumpByte(D, f->numparams);
+  dumpArgnames(D, f);// add@om
   dumpByte(D, f->is_vararg);
   dumpByte(D, f->maxstacksize);
   dumpCode(D, f);
