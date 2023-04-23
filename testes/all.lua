@@ -4,6 +4,9 @@
 
 
 local version = "Lua 5.4"
+-- mod@om
+local io = io -- 不明白啊，最后的的全局io获取不到了。而且这一行和print放一起也不行。
+--
 if _VERSION ~= version then
   io.stderr:write("This test suite is for ", version,
                   ", not for ", _VERSION, "\nExiting tests")
@@ -292,7 +295,7 @@ end
 
 print("final OK !!!")
 -- mod@om
-io.stderr "final OK !!!"
+io.stderr:write "final OK !!!"
 --
 
 
