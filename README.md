@@ -12,6 +12,7 @@
 
 ## 不兼容修改
 - __concat 废弃了。`$string`的实现复用了`OP_CONCAT`指令，修改了 concat 的实现。
+- 替换掉Table的实现
 
 # Lua Official
 

@@ -9,6 +9,7 @@
 #ifndef lua_h
 #define lua_h
 
+#include <stdint.h>
 #include <stdarg.h>
 #include <stddef.h>
 

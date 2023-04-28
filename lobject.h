@@ -721,15 +721,23 @@ typedef union Node {
 #define setrealasize(t)		((t)->flags &= cast_byte(~BITRAS))
 #define setnorealasize(t)	((t)->flags |= BITRAS)
 
-
+// 支持固定的31种长度
+#define MAX_LOG_SIZE 30
+/*
+** define Table as A pure Hash Table.
+** 1. 如果没有删除操作。插入顺序和遍历顺序一致。【即便有删除操作，也可以推断出顺序，但是这和实际实现密切相关】
+*/
 typedef struct Table {
   CommonHeader;
   lu_byte flags;  /* 1<<p means tagmethod(p) is not present */
   lu_byte lsizenode;  /* log2 of size of 'node' array */
   unsigned int alimit;  /* "limit" of 'array' array */
   TValue *array;  /* array part */
-  Node *node;
   Node *lastfree;  /* any free position is before this position */
+  int32_t count;// valided element num = count - freecount
+  int32_t freecount;
+  int32_t freelist;
+  Node *node; // hash index buckets store after = (int*)(data + datasize), totoal memory size = sizeof(Node)*datasize + sizeof(int)*hashsize.
   struct Table *metatable;
   GCObject *gclist;
 } Table;

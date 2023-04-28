@@ -38,6 +38,90 @@
 #include "ltable.h"
 #include "lvm.h"
 
+// HashTable 的实现算法来自 dotnet
+
+/// Hash Function For Data
+// lua float
+inline static int32_t gethash_double(double number){
+  int64_t num = *(int64_t*)(&number);
+	if (((num - 1) & 0x7FFFFFFFFFFFFFFFL) >= 9218868437227405312L)
+	{
+		num &= 0x7FF0000000000000L;
+	}
+	return (int32_t)num ^ (int32_t)(num >> 32);
+}
+
+// lua integer
+inline static int32_t gethash_int64(int64_t num){
+  return (int32_t)num ^ (int32_t)(num >> 32);
+}
+
+inline static int32_t gethash_ptr(void* ptr){
+  return (int32_t)ptr;// dotnet的实现方法就是这样直接截断
+}
+
+// generic hash function
+static int32_t gethash(const TValue *key) {
+  switch (ttypetag(key)) {
+    case LUA_VNUMINT: {
+      lua_Integer i = ivalue(key);
+      return gethash_int64(i);
+    }
+    case LUA_VNUMFLT: {
+      lua_Number n = fltvalue(key);
+      return gethash_double(n);
+    }
+    case LUA_VSHRSTR: {
+      TString *ts = tsvalue(key);
+      return ts->hash;
+    }
+    case LUA_VLNGSTR: {
+      TString *ts = tsvalue(key);
+      return luaS_hashlongstr(ts);
+    }
+    case LUA_VFALSE:
+      return 0;
+    case LUA_VTRUE:
+      return 1;
+    case LUA_VLIGHTUSERDATA: {
+      void *p = pvalue(key);
+      return gethash_ptr(p);
+    }
+    case LUA_VLCF: {
+      lua_CFunction f = fvalue(key);
+      return gethash_ptr(f);
+    }
+    default: {
+      GCObject *o = gcvalue(key);
+      return gethash_ptr(o);
+    }
+  }
+}
+
+/// Size And Prime
+static const uint32_t s_primes[MAX_LOG_SIZE + 1] = {
+    1,3,5,11,19,41,79,157,317,631,1259,2521,5039,10079,20161,40343,80611,161221,322459,644881,1289749,2579513,5158999,10317991,20635981,41271991,82543913,165087817,330175613,660351239,1320702451
+};
+static const uint64_t s_primes_fastmod_multiplier[MAX_LOG_SIZE + 1] = {
+    0,6148914691236517206ull,3689348814741910324ull,1676976733973595602ull,970881267037344822ull,449920587163647601ull,233503089540627236ull,117495185182863387ull,58191621683626346ull,29234142747558719ull,14651901567680343ull,7317232873347700ull,3660794616731406ull,1830215703314769ull,914971681648210ull,457247702791304ull,228836561681527ull,114418990539133ull,57206479191803ull,28604880704672ull,14302584513506ull,7151250671623ull,3575644049110ull,1787823237461ull,893911662049ull,446955516969ull,223477945294ull,111738978739ull,55869492923ull,27934745912ull,13967373242ull,
+};
+
+/// <summary>Performs a mod operation using the multiplier pre-computed.</summary>
+/// <remarks>This should only be used on 64-bit.</remarks>
+inline static uint32_t helper_FastMod(uint32_t value, uint32_t divisor, uint64_t multiplier)
+{
+  uint32_t highbits = (uint32_t)(((((multiplier * value) >> 32) + 1) * divisor) >> 32);
+  return highbits;
+}
+
+inline static uint32_t getbucketidx(uint32_t value, uint8_t log_size)
+{
+  lua_assert(log_size <= MAX_LOG_SIZE);
+  uint32_t d = s_primes[log_size];
+  uint64_t m = s_primes_fastmod_multiplier[log_size];
+  return helper_FastMod(value, d, m);
+}
+
 
 /*
 ** MAXABITS is the largest integer such that MAXASIZE fits in an
@@ -67,6 +151,10 @@
 */
 #define MAXHSIZE	luaM_limitN(1u << MAXHBITS, Node)
 
+// get bucket index start ptr. bucket index store after node
+#define getbucketstart(t) ((int32_t*)((t)->node + (t)->hashsize))
+// get bucket head.
+#define getbucket(t,idx) (getbucketstart(t) + (idx))
 
 /*
 ** When the original hash value is good, hashing by a power of 2
@@ -105,7 +193,7 @@ static const TValue absentkey = {ABSTKEYCONSTANT};
 ** remainder, which is faster. Otherwise, use an unsigned-integer
 ** remainder, which uses all bits and ensures a non-negative result.
 */
-static Node *hashint (const Table *t, lua_Integer i) {
+static int hashint (const Table *t, lua_Integer i) {
   lua_Unsigned ui = l_castS2U(i);
   if (ui <= (unsigned int)INT_MAX)
     return hashmod(t, cast_int(ui));
@@ -142,7 +230,6 @@ static int l_hashfloat (lua_Number n) {
   }
 }
 #endif
-
 
 /*
 ** returns the 'main' position of an element in a table (that is,
@@ -199,23 +286,9 @@ l_sinline Node *mainpositionfromnode (const Table *t, Node *nd) {
 ** values have been normalized, so integers cannot be equal to
 ** floats. It is assumed that 'eqshrstr' is simply pointer equality, so
 ** that short strings are handled in the default case.
-** A true 'deadok' means to accept dead keys as equal to their original
-** values. All dead keys are compared in the default case, by pointer
-** identity. (Only collectable objects can produce dead keys.) Note that
-** dead long strings are also compared by identity.
-** Once a key is dead, its corresponding value may be collected, and
-** then another value can be created with the same address. If this
-** other value is given to 'next', 'equalkey' will signal a false
-** positive. In a regular traversal, this situation should never happen,
-** as all keys given to 'next' came from the table itself, and therefore
-** could not have been collected. Outside a regular traversal, we
-** have garbage in, garbage out. What is relevant is that this false
-** positive does not break anything.  (In particular, 'next' will return
-** some other valid item on the table or nil.)
 */
-static int equalkey (const TValue *k1, const Node *n2, int deadok) {
-  if ((rawtt(k1) != keytt(n2)) &&  /* not the same variants? */
-       !(deadok && keyisdead(n2) && iscollectable(k1)))
+static int equalkey (const TValue *k1, const Node *n2) {
+  if (rawtt(k1) != keytt(n2))
    return 0;  /* cannot be same key */
   switch (keytt(n2)) {
     case LUA_VNIL: case LUA_VFALSE: case LUA_VTRUE:
@@ -290,9 +363,7 @@ static unsigned int setlimittosize (Table *t) {
 
 
 /*
-** "Generic" get version. (Not that generic: not valid for integers,
-** which may be in array part, nor for floats with integral values.)
-** See explanation about 'deadok' in function 'equalkey'.
+** "Generic" get version.
 */
 static const TValue *getgeneric (Table *t, const TValue *key, int deadok) {
   Node *n = mainpositionTV(t, key);
@@ -718,35 +789,24 @@ void luaH_newkey (lua_State *L, Table *t, const TValue *key, TValue *value) {
 
 
 /*
-** Search function for integers. If integer is inside 'alimit', get it
-** directly from the array part. Otherwise, if 'alimit' is not equal to
-** the real size of the array, key still can be in the array part. In
-** this case, try to avoid a call to 'luaH_realasize' when key is just
-** one more than the limit (so that it can be incremented without
-** changing the real size of the array).
+** Search function for integers.
 */
 const TValue *luaH_getint (Table *t, lua_Integer key) {
-  if (l_castS2U(key) - 1u < t->alimit)  /* 'key' in [1, t->alimit]? */
-    return &t->array[key - 1];
-  else if (!limitequalsasize(t) &&  /* key still may be in the array part? */
-           (l_castS2U(key) == t->alimit + 1 ||
-            l_castS2U(key) - 1u < luaH_realasize(t))) {
-    t->alimit = cast_uint(key);  /* probably '#t' is here now */
-    return &t->array[key - 1];
-  }
-  else {
-    Node *n = hashint(t, key);
-    for (;;) {  /* check whether 'key' is somewhere in the chain */
-      if (keyisinteger(n) && keyival(n) == key)
-        return gval(n);  /* that's it */
-      else {
-        int nx = gnext(n);
-        if (nx == 0) break;
-        n += nx;
-      }
+  lua_assert(t->node != NULL);
+  Node* nodes = t->node;
+  uint32_t hash = hashint(t, key);
+  int32_t* bucket = getbucket(t, hash);
+  int32_t nx = *bucket;
+  while(nx >= 0){
+    Node* n = nodes + nx;
+    if (keyisinteger(n) && keyival(n) == key){
+      return gval(n);
     }
-    return &absentkey;
+    else{
+      nx = gnext(n);
+    }
   }
+  return &absentkey;
 }
 
 
@@ -754,18 +814,21 @@ const TValue *luaH_getint (Table *t, lua_Integer key) {
 ** search function for short strings
 */
 const TValue *luaH_getshortstr (Table *t, TString *key) {
-  Node *n = hashstr(t, key);
-  lua_assert(key->tt == LUA_VSHRSTR);
-  for (;;) {  /* check whether 'key' is somewhere in the chain */
-    if (keyisshrstr(n) && eqshrstr(keystrval(n), key))
-      return gval(n);  /* that's it */
-    else {
-      int nx = gnext(n);
-      if (nx == 0)
-        return &absentkey;  /* not found */
-      n += nx;
+  lua_assert(t->node != NULL);
+  Node* nodes = t->node;
+  uint32_t hash = hashstr(t, key);
+  int* bucket = getbucket(t, hash);
+  int nx = *bucket;
+  while(nx >= 0){
+    Node* n = nodes + nx;
+    if (keyisshrstr(n) && eqshrstr(keystrval(n), key)){
+      return gval(n);
+    }
+    else{
+      nx = gnext(n);
     }
   }
+  return &absentkey;
 }
 
 
