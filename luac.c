@@ -429,8 +429,10 @@ static void PrintCode(const Proto* f)
 	if (isk) { printf(" "); PrintConstant(f,c); }
 	break;
    case OP_NEWTABLE:
-	printf("%d %d %d",a,b,c);
+	printf("%d %d %s",a,b,ISK);
 	printf(COMMENT "%d",c+EXTRAARGC);
+	// printf("%d %d %d",a,b,c);
+	// printf(COMMENT "%d",c+EXTRAARGC);
 	break;
    case OP_SELF:
 	printf("%d %d %d%s",a,b,c,ISK);

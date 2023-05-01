@@ -891,11 +891,15 @@ typedef struct ConsControl {
   int nh;  /* total number of 'record' elements */
   int na;  /* number of array elements already stored */
   int tostore;  /* number of array elements pending to be stored */
+  int isarray;  // add@om 是否时数组
 } ConsControl;
 
 
 static void recfield (LexState *ls, ConsControl *cc) {
   /* recfield -> (NAME | '['exp']') = exp */
+  if (cc->isarray){
+    luaX_syntaxerror(ls, "array is not table, do not support key=value.");
+  }
   FuncState *fs = ls->fs;
   int reg = ls->fs->freereg;
   expdesc tab, key, val;
@@ -972,11 +976,12 @@ static void constructor (LexState *ls, expdesc *t) {
      sep -> ',' | ';' */
   FuncState *fs = ls->fs;
   int line = ls->linenumber;
-  int pc = luaK_codeABC(fs, OP_NEWTABLE, 0, 0, 0);
+  int pc = luaK_codeABCk(fs, OP_NEWTABLE, 0, 0, 0, 0);
   ConsControl cc;
-  luaK_code(fs, 0);  /* space for extra arg. */
+  // luaK_code(fs, 0);  /* space for extra arg. */
   cc.na = cc.nh = cc.tostore = 0;
   cc.t = t;
+  cc.isarray = 0;
   init_exp(t, VNONRELOC, fs->freereg);  /* table will be at stack top */
   luaK_reserveregs(fs, 1);
   init_exp(&cc.v, VVOID, 0);  /* no value (yet) */
@@ -988,6 +993,32 @@ static void constructor (LexState *ls, expdesc *t) {
     field(ls, &cc);
   } while (testnext(ls, ',') || testnext(ls, ';'));
   check_match(ls, '}', '{', line);
+  lastlistfield(fs, &cc);
+  luaK_settablesize(fs, pc, t->u.info, cc.na, cc.nh);
+}
+
+static void array_constructor(LexState *ls, expdesc *t) {
+  /* array -> '[' [field ] { sep field } [sep] ']' 
+      sep -> ',' | ';' */
+  FuncState *fs = ls->fs;
+  int line = ls->linenumber;
+  int pc = luaK_codeABCk(fs, OP_NEWTABLE, 0, 0, 0, 1);
+  ConsControl cc;
+  // luaK_code(fs, 0);  /* space for extra arg. */
+  cc.na = cc.nh = cc.tostore = 0;
+  cc.t = t;
+  cc.isarray = 1;
+  init_exp(t, VNONRELOC, fs->freereg);  /* table will be at stack top */
+  luaK_reserveregs(fs, 1);
+  init_exp(&cc.v, VVOID, 0);  /* no value (yet) */
+  checknext(ls, '[');
+  do {
+    lua_assert(cc.v.k == VVOID || cc.tostore > 0);
+    if (ls->t.token == '}') break;
+    closelistfield(fs, &cc);
+    field(ls, &cc);
+  } while (testnext(ls, ',') || testnext(ls, ';'));
+  check_match(ls, ']', '[', line);
   lastlistfield(fs, &cc);
   luaK_settablesize(fs, pc, t->u.info, cc.na, cc.nh);
 }
@@ -1338,7 +1369,7 @@ static void suffixedexp (LexState *ls, expdesc *v) {
 
 static void simpleexp (LexState *ls, expdesc *v) {
   /* simpleexp -> FLT | INT | STRING | NIL | TRUE | FALSE | ... |
-                  constructor | FUNCTION body | suffixedexp */
+                  constructor| array_constructor | FUNCTION body | suffixedexp */
   switch (ls->t.token) {
     case TK_FLT: {
       init_exp(v, VKFLT, 0);
@@ -1375,6 +1406,10 @@ static void simpleexp (LexState *ls, expdesc *v) {
     }
     case '{': {  /* constructor */
       constructor(ls, v);
+      return;
+    }
+    case '[': {
+      array_constructor(ls, v);
       return;
     }
     case TK_FUNCTION: {

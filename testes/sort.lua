@@ -85,9 +85,8 @@ assert(a[1] == undef and #a == 0)
 a = table.pack(table)
 assert(a[1] == table and #a == 1)
 
--- compat@om mylua 中 table不存在问题。不过后面改成array实现后，这个 #a == 4
 a = table.pack(nil, nil, nil, nil)
-assert(a[1] == nil and #a == 0)
+assert(a[1] == nil and #a == 4)
 
 -- testing move
 do

@@ -468,7 +468,8 @@ static void checkrefs (global_State *g, GCObject *o) {
       checkvalref(g, o, gco2upv(o)->v);
       break;
     }
-    case LUA_VTABLE: {
+    // todo@om tests.c
+    case LUA_VTABLE: case LUA_VArray: {
       checktable(g, gco2t(o));
       break;
     }
@@ -541,6 +542,7 @@ static lu_mem checkgraylist (global_State *g, GCObject *o) {
       l_setbit(o->marked, TESTBIT);  /* mark that object is in a gray list */
     total++;
     switch (o->tt) {
+      case LUA_VArray:
       case LUA_VTABLE: o = gco2t(o)->gclist; break;
       case LUA_VLCL: o = gco2lcl(o)->gclist; break;
       case LUA_VCCL: o = gco2ccl(o)->gclist; break;
@@ -655,7 +657,7 @@ int lua_checkmemory (lua_State *L) {
     checkobject(g, o, 0, G_NEW);
     incifingray(g, o, &totalshould);
     assert(tofinalize(o));
-    assert(o->tt == LUA_VUSERDATA || o->tt == LUA_VTABLE);
+    assert(o->tt == LUA_VUSERDATA || o->tt == LUA_VTABLE || o->tt == LUA_VArray);
   }
   if (keepinvariant(g))
     assert(totalin == totalshould);

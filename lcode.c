@@ -1767,14 +1767,19 @@ void luaK_fixline (FuncState *fs, int line) {
 }
 
 
+// mod@om
 void luaK_settablesize (FuncState *fs, int pc, int ra, int asize, int hsize) {
   Instruction *inst = &fs->f->code[pc];
-  int rb = (hsize != 0) ? luaO_ceillog2(hsize) + 1 : 0;  /* hash size */
-  int extra = asize / (MAXARG_C + 1);  /* higher bits of array size */
-  int rc = asize % (MAXARG_C + 1);  /* lower bits of array size */
-  int k = (extra > 0);  /* true iff needs extra argument */
-  *inst = CREATE_ABCk(OP_NEWTABLE, ra, rb, rc, k);
-  *(inst + 1) = CREATE_Ax(OP_EXTRAARG, extra);
+  int isarray = GETARG_k(*inst);
+  uint32_t count = hsize + asize;
+  int rb = (count != 0) ? luaO_ceillog2(count) + 1: 0;
+  *inst = CREATE_ABCk(OP_NEWTABLE, ra, rb, 0, isarray);
+  // int rb = (hsize != 0) ? luaO_ceillog2(hsize) + 1 : 0;  /* hash size */
+  // int extra = asize / (MAXARG_C + 1);  /* higher bits of array size */
+  // int rc = asize % (MAXARG_C + 1);  /* lower bits of array size */
+  // int k = (extra > 0);  /* true iff needs extra argument */
+  // *inst = CREATE_ABCk(OP_NEWTABLE, ra, rb, rc, k);
+  // *(inst + 1) = CREATE_Ax(OP_EXTRAARG, extra);
 }
 
 

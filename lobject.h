@@ -133,7 +133,8 @@ typedef struct TValue {
 #define setobj2n	setobj
 /* to table */
 #define setobj2t	setobj
-
+/* to array*/
+#define setobj2array	setobj
 
 /*
 ** Entries in a Lua stack. Field 'tbclist' forms a list of all
@@ -660,12 +661,14 @@ typedef union Closure {
 */
 
 #define LUA_VTABLE	makevariant(LUA_TTABLE, 0)
-// todo@om Array
 #define LUA_VArray  makevariant(LUA_TTABLE, 1)
 
-#define ttistable(o)		checktag((o), ctb(LUA_VTABLE))
+#define ttistable(o)		checktype((o), LUA_TTABLE)
 #define ttisarray(o)    checktag((o), ctb(LUA_VArray))
-#define ttishash(o)     checktag((o), ctb(LUA_VTABLE))
+#define ttismap(o)     checktag((o), ctb(LUA_VTABLE))
+
+#define table_isarray(t)  ((t)->tt == LUA_VArray)
+#define table_ismap(t)    ((t)->tt == LUA_VTABLE)
 
 #define hvalue(o)	check_exp(ttistable(o), gco2t(val_(o).gc))
 
@@ -676,13 +679,19 @@ typedef union Closure {
 
 #define sethvalue2s(L,o,h)	sethvalue(L,s2v(o),h)
 
+#define setarrayvalue(L,obj,x) \
+  { TValue *io = (obj); Table *x_ = (x); \
+    val_(io).gc = obj2gco(x_); settt_(io, ctb(LUA_VArray)); \
+    checkliveness(L,io); }
+
+#define setarrayvalue2s(L,o,h)	setarrayvalue(L,s2v(o),h)
 
 /*
 ** Nodes for Hash tables: A pack of two TValue's (key-value pairs)
 ** plus a 'next' field to link colliding entries. The distribution
 ** of the key's fields ('key_tt' and 'key_val') not forming a proper
 ** 'TValue' allows for a smaller size for 'Node' both in 4-byte
-** and 8-byte alignments.
+** and 8-byte alignments. int win64, sizeof(Node) == 12, sizeof(TValue) == 8
 */
 typedef union Node {
   struct NodeKey {
@@ -694,7 +703,7 @@ typedef union Node {
   TValue i_val;  /* direct access to node's value as a proper 'TValue' */
 } Node;
 
-/* returns the Node, given the value of a table entry */
+/* returns the Node, given the value of a map entry */
 #define nodefromval(v)	cast(Node *, (v))
 
 /* copy a value into a key */
@@ -715,27 +724,46 @@ typedef union Node {
 #define MAXTAGLOOP	2000
 
 // 支持固定的若干种长度，2**lsizenode。【todo@om 应该和 size_t 相匹配，30在32位平台上太大了】
-#define MAX_LOG_SIZE 30
-#define table_count(t)    ((t)->count - (t)->freecount)
+#define MAX_LOG_SIZE        30
+#define MAX_ARRAY_IDX       ((size_t)1 << MAX_LOG_SIZE)
+#define table_count(t)      ((t)->count - (t)->freecount)
+// 最大的有效长度。小心使用
+#define table_maxcount(t)   ((t)->count)
+
+// for map
+#define get_map_ptr(t)        ((Node*)(t)->data)
+#define get_map_node(t,i)     (get_map_ptr(t) + i)
+#define get_node_val(n)       (&(n)->i_val)
+#define get_node_next(n)      ((n)->u.next)
+#define get_node_limit(t)     (get_map_node(t,(t)->count))
+
+// for array
+#define get_array_ptr(t)      ((TValue*)(t)->data)
+#define get_array_val(t, i)   (get_array_ptr(t) + i)
+
+#define gnode(t,i)        get_map_node(t,i)
+#define gval(n)           get_node_val(n)
+#define gnext(n)          get_node_next(n)
 
 /*
-** one after last element in a hash array
+** one after last element in a map
 */
-#define gnodelast(h)	gnode(h, (h)->count)
+#define gnodelast(h)      get_map_node(h, (h)->count)
 
 /*
-** define Table as A pure Hash Table.
-** 1. 如果没有删除操作。插入顺序和遍历顺序一致。【即便有删除操作，也可以推断出顺序，但是这和实际实现密切相关】
+** table = map | array
 */
 typedef struct Table {
   CommonHeader;
   lu_byte flags;  /* 1<<p means tagmethod(p) is not present */
-  lu_byte lsizenode;  /* log2 of size of 'node' array */
-  
-  int32_t count;// valided element num = count - freecount
-  int32_t freecount;
-  int32_t freelist;
-  Node *node; // hash index buckets store after = (int*)(data + datasize), totoal memory size = sizeof(Node)*datasize + sizeof(int)*hashsize.
+  lu_byte lsizenode;  /* log2 of size of capacity */
+
+  int32_t count;// table_count = count - freecount
+  int32_t freecount;// map: 空洞的数量. array:0,不记录空洞数量，麻烦
+  int32_t freelist;// map 下的空洞链表头。特殊值：(-1: 被锁定，不能读写，用于排序)
+
+  void *data;// TValue* for array, Node*+int32_t* for map
+
   struct Table *metatable;
   GCObject *gclist;
 } Table;

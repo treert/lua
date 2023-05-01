@@ -128,14 +128,17 @@ inline static uint32_t getbucketidx(uint32_t hash, uint8_t log_size)
   return helper_FastMod(hash, d, m);
 }
 
-#define gettableindexmemsize(lsize) (sizeof(int32_t)*s_primes[lsize])
-#define gettablememsize(lsize) (sizeof(Node)*twoto(lsize) + gettableindexmemsize(lsize))
+#define getmapindexmemsize(lsize) (sizeof(int32_t)*s_primes[lsize])
+#define getmapmemsize(lsize) (sizeof(Node)*twoto(lsize) + getmapindexmemsize(lsize))
 
 // get bucket index start ptr. bucket index store after node
-#define getbucketstart(t)       ((int32_t*)(t->node + twoto(t->lsizenode)))
+#define getbucketstart(t)       ((int32_t*)(get_map_ptr(t) + twoto(t->lsizenode)))
 // get bucket head.
 #define getbucket(t,idx)        (getbucketstart(t) + (idx))
 #define getbucketbyhash(t,hash) (getbucketstart(t) + getbucketidx(hash,t->lsizenode))
+
+// for array
+#define getarraymemsize(lsize) (sizeof(TValue)*twoto(lsize))
 
 
 #define dummynode		(&dummynode_)
@@ -181,8 +184,8 @@ static int equalkey (const TValue *k1, const Node *n2) {
 ** Search function for integers.
 */
 static Node* getint_node (Table *t, lua_Integer key) {
-  lua_assert(t->node != NULL);
-  Node* nodes = t->node;
+  lua_assert(get_map_ptr(t) != NULL);
+  Node* nodes = get_map_ptr(t);
   uint32_t hash = gethash_int64(key);
   int32_t* bucket = getbucketbyhash(t, hash);
   int32_t nx = *bucket;
@@ -203,8 +206,8 @@ static Node* getint_node (Table *t, lua_Integer key) {
 ** search function for short strings
 */
 static Node* getshortstr_node (Table *t, TString *key) {
-  lua_assert(t->node != NULL);
-  Node* nodes = t->node;
+  lua_assert(get_map_ptr(t) != NULL);
+  Node* nodes = get_map_ptr(t);
   uint32_t hash = key->hash;
   int* bucket = getbucketbyhash(t, hash);
   int nx = *bucket;
@@ -224,9 +227,9 @@ static Node* getshortstr_node (Table *t, TString *key) {
 ** "Generic" get version.
 */
 static Node* getgeneric_node(Table *t, const TValue *key) {
-  lua_assert(t->node != NULL);
+  lua_assert(get_map_ptr(t) != NULL);
   lua_assert(!ttisnil(key));
-  Node* nodes = t->node;
+  Node* nodes = get_map_ptr(t);
   uint32_t hash = gethash(key);
   int32_t* bucket = getbucketbyhash(t, hash);
   int32_t nx = *bucket;
@@ -243,6 +246,27 @@ static Node* getgeneric_node(Table *t, const TValue *key) {
 }
 
 int luaH_next (lua_State *L, Table *t, StkId key) {
+  if(table_count(t) == 0) return 0;
+  if(table_isarray(t)){
+    // for array
+    lua_Integer idx = INT32_MAX;
+    if (ttisnil(s2v(key))){
+      idx = 0;
+    }
+    else if (ttisinteger(s2v(key))){
+      idx = ivalue(s2v(key));
+    }
+    // skip empty value
+    for(;idx < t->count; idx++){
+      if (!isempty(get_array_val(t,idx))) {
+        setivalue(s2v(key), idx + 1);
+        setobj2s(L, key + 1, get_array_val(t, idx));
+        return 1;
+      }
+    }
+    return 0;  /* no more elements */
+  }
+  // for map
   Node* node;
   if (!ttisnil(s2v(key))){
     node = getgeneric_node(t, s2v(key));
@@ -250,10 +274,9 @@ int luaH_next (lua_State *L, Table *t, StkId key) {
       luaG_runerror(L, "invalid key to 'next'");  /* key not found */
       return 0;// lua 是会报错的。【todo@om 可以直接注释掉上面的抛错，这样next就不会报错了。只是这样和lua不兼容了 】
     }
-    node += 1;
+    node ++;
   }
   else{
-    if(table_count(t) == 0) return 0;
     node = gnode(t, 0);// 开始遍历
   }
   Node* limit = gnodelast(t);
@@ -269,6 +292,18 @@ int luaH_next (lua_State *L, Table *t, StkId key) {
 
 int luaH_itor_next (lua_State *L, Table *t, int32_t itor_idx, StkId ret_idx) {
   lua_assert(itor_idx >= 0);
+  if(table_isarray(t)){
+    // for array
+    for(;itor_idx < t->count; itor_idx++){
+      if(!isempty(get_array_val(t, itor_idx))){
+        setivalue(s2v(ret_idx), itor_idx + 1);
+        setobj2s(L, ret_idx + 1, get_array_val(t, itor_idx));
+        return itor_idx+1;
+      }
+    }
+    return -1;
+  }
+  // for map
   for(;itor_idx < t->count; itor_idx++){
     Node* node = gnode(t, itor_idx);
     if(!isempty(gval(node))){
@@ -291,13 +326,27 @@ void luaH_addsize (lua_State *L, Table *t, int32_t addsize){
   if(lsize > MAX_LOG_SIZE){
     luaG_runerror(L, "table overflow");
   }
-  size_t oldsize = t->node == NULL ? 0: gettablememsize(t->lsizenode);
-  size_t newsize = gettablememsize(lsize);
-  t->node = (Node*)luaM_realloc(L, t->node, oldsize, newsize);
+  if(t->data != NULL){
+    if(lsize <= t->lsizenode) return;// 空洞很多
+  }
+  // for array
+  if (table_isarray(t)){
+    size_t oldsize = t->data == NULL ? 0: getarraymemsize(t->lsizenode);
+    size_t newsize = getarraymemsize(lsize);
+    t->data = (Node*)luaM_realloc(L, t->data, oldsize, newsize);
+    t->lsizenode = lsize;
+    // array do nothing, just return
+    return;
+  }
+  // for map
+  int32_t maxcount = table_maxcount(t);
+  size_t oldsize = t->data == NULL ? 0: getmapmemsize(t->lsizenode);
+  size_t newsize = getmapmemsize(lsize);
+  t->data = luaM_realloc(L, t->data, oldsize, newsize);
   t->lsizenode = lsize;
   // rebuild bucket idx
-  memset(getbucketstart(t),-1,gettableindexmemsize(t->lsizenode));
-  for (int32_t i = 0; i < oldcount; i++) {
+  memset(getbucketstart(t),-1,getmapindexmemsize(t->lsizenode));
+  for (int32_t i = 0; i < maxcount; i++) {
     Node *n = gnode(t, i);
     if(!isempty(gval(n))){
       TValue key;
@@ -330,14 +379,29 @@ Table *luaH_new (lua_State *L) {
   t->count = 0;
   t->freecount = 0;
   t->freelist = 0;
-  t->node = NULL;  /* lua use common 'dummynode', mylua just set NULL*/
+  t->data = NULL;  /* lua use common 'dummynode', mylua just set NULL*/
+  return t;
+}
+
+Table *luaH_newarray (lua_State *L) {
+  GCObject *o = luaC_newobj(L, LUA_VArray, sizeof(Table));
+  Table *t = gco2t(o);
+  t->metatable = NULL;
+  t->flags = cast_byte(maskflags);  /* array has no metamethod fields */
+  t->lsizenode = 0;
+  t->count = 0;
+  t->freecount = 0;
+  t->freelist = 0;
+  t->data = NULL;  /* lua use common 'dummynode', mylua just set NULL*/
   return t;
 }
 
 
 void luaH_free (lua_State *L, Table *t) {
-  if (t->node != NULL)
-    luaM_freemem(L, t->node, gettablememsize(t->lsizenode));
+  if (t->data != NULL){
+    size_t size = table_isarray(t) ? getarraymemsize(t->lsizenode) : getmapmemsize(t->lsizenode);
+    luaM_freemem(L, t->data, size);
+  }
   luaM_free(L, t);
 }
 
@@ -345,6 +409,14 @@ void luaH_free (lua_State *L, Table *t) {
 ** Search function for integers.
 */
 const TValue *luaH_getint (Table *t, lua_Integer key) {
+  if(table_isarray(t)){
+    // for array
+    if ( 0 < key && key <= t->count){
+      return get_array_val(t, key-1);
+    }
+    return &absentkey;
+  }
+  // for map
   if(table_count(t) == 0) return &absentkey;
   Node* n = getint_node(t, key);
   return n ? gval(n) : &absentkey;
@@ -355,6 +427,10 @@ const TValue *luaH_getint (Table *t, lua_Integer key) {
 ** search function for short strings
 */
 const TValue *luaH_getshortstr (Table *t, TString *key) {
+  if(table_isarray(t)){
+    return &absentkey;
+  }
+  // for map
   if(table_count(t) == 0) return &absentkey;
   Node* n = getshortstr_node(t, key);
   return n ? gval(n) : &absentkey;
@@ -364,6 +440,10 @@ const TValue *luaH_getshortstr (Table *t, TString *key) {
 ** search function for strings
 */
 const TValue *luaH_getstr (Table *t, TString *key) {
+  if(table_isarray(t)){
+    return &absentkey;
+  }
+  // for map
   if(table_count(t) == 0) return &absentkey;
   Node* n;
   if (key->tt == LUA_VSHRSTR)
@@ -381,6 +461,20 @@ const TValue *luaH_getstr (Table *t, TString *key) {
 ** main search function
 */
 const TValue *luaH_get (Table *t, const TValue *key) {
+  if(table_isarray(t)){
+    lua_Integer idx = 0;
+    if (ttypetag(key) == LUA_VNUMINT) {
+      idx = ivalue(key);
+    }
+    else if (ttypetag(key) == LUA_VNUMFLT) {
+      luaV_flttointeger(fltvalue(key), &idx, F2Ieq); /* integral index? */
+    }
+    if ( 0 < idx && idx <= t->count){
+      return get_array_val(t, idx-1);
+    }
+    return &absentkey;
+  }
+  // for map
   if(table_count(t) == 0) return &absentkey;
   Node* n;
   switch (ttypetag(key)) {
@@ -416,6 +510,30 @@ const TValue *luaH_get (Table *t, const TValue *key) {
 void luaH_finishset (lua_State *L, Table *t, const TValue *key,
                                    const TValue *slot, TValue *value) {
   lua_assert(slot != NULL);
+  if (table_isarray(t)) {
+    // for array
+    if (isabstkey(slot)){
+      lua_Integer idx = 0;
+      if (ttypetag(key) == LUA_VNUMINT) {
+        idx = ivalue(key);
+      }
+      else if (ttypetag(key) == LUA_VNUMFLT) {
+        if (!luaV_flttointeger(fltvalue(key), &idx, F2Ieq)){
+          luaG_runerror(L, "array index is float, expect integer");
+        }
+      }
+      else{
+        luaG_typeerror(L, key, "index array with");
+      }
+
+      luaH_newarrayitem(L, t, idx, value);
+    }
+    else {
+      setobj2array(L, cast(TValue *, slot), value);// just set, dont care about nil
+    }
+    return;
+  }
+  // for map
   if (isabstkey(slot)){
     luaH_newkey(L, t, key, value);
   }
@@ -439,6 +557,17 @@ void luaH_set (lua_State *L, Table *t, const TValue *key, TValue *value) {
 }
 
 void luaH_setint (lua_State *L, Table *t, lua_Integer key, TValue *value) {
+  if(table_isarray(t)){
+    // for array
+    if ( 0 < key && key <= t->count){
+      setobj2array(L, get_array_val(t, key-1), value);// just set, dont care about nil
+    }
+    else {
+      luaH_newarrayitem(L, t, key, value);
+    }
+    return;
+  }
+  // for map
   const TValue *slot = luaH_getint(t, key);
   TValue k;
   setivalue(&k, key);
@@ -447,6 +576,7 @@ void luaH_setint (lua_State *L, Table *t, lua_Integer key, TValue *value) {
 
 // 添加 (key,value), key should not exsit. maybe need barrier value.
 void luaH_newkey (lua_State *L, Table *t, const TValue *key, TValue *value) {
+  lua_assert(table_ismap(t));
   if(ttisnil(value)) return;// do nothing
 
   TValue aux;
@@ -463,7 +593,7 @@ void luaH_newkey (lua_State *L, Table *t, const TValue *key, TValue *value) {
       luaG_runerror(L, "table index is NaN"); // 如果不这么做，就得修改 equalkey里面float的部分了。
   }
 
-  Node* nodes = t->node;
+  Node* nodes = get_map_ptr(t);
   Node* newnode;
   if (t->freecount > 0) {
     newnode = nodes + t->freelist;
@@ -471,10 +601,10 @@ void luaH_newkey (lua_State *L, Table *t, const TValue *key, TValue *value) {
     t->freecount--;
   }
   else {
-    if(t->node == NULL || t->count == twoto(t->lsizenode)){
+    if(nodes == NULL || t->count == twoto(t->lsizenode)){
       // grow hash
       luaH_addsize(L, t, 1);
-      nodes = t->node;
+      nodes = get_map_ptr(t);
     }
     newnode = nodes + t->count;
     t->count++;
@@ -488,17 +618,34 @@ void luaH_newkey (lua_State *L, Table *t, const TValue *key, TValue *value) {
   setobj2t(L, gval(newnode), value);
 }
 
+void luaH_newarrayitem (lua_State *L, Table *t, lua_Integer idx, TValue *value) {
+  lua_assert(table_isarray(t));
+  if (idx <= 0){
+    luaG_runerror(L, "array index must > 0.");
+  }
+  lua_assert(idx > t->count);
+  if (idx > MAX_ARRAY_IDX){
+    luaG_runerror(L, "array index to big. max support is %d", MAX_ARRAY_IDX);
+  }
+  // grow array
+  if (t->data == NULL || (lua_Unsigned)idx > twoto(t->lsizenode)){
+    luaH_addsize(L, t, (int32_t)idx - t->count);
+  }
+  t->count = (int32_t)idx;
+  setobj2array(L, get_array_val(t, idx-1), value);
+}
+
 /* mark an entry as empty. only luaH_remove can use*/
 #define setempty(v)		settt_(v, LUA_VEMPTY)
 
 void luaH_remove (Table *t, Node *node) {
-  lua_assert(t->node != NULL);
+  lua_assert(t->data != NULL);
   TValue key;
   lua_State *fakeL = NULL;
   getnodekey(fakeL, &key, node);
   uint32_t hash = gethash(&key);
   int32_t* bucket = getbucketbyhash(t, hash);
-  Node* nodes = t->node;
+  Node* nodes = get_map_ptr(t);
   Node* prenode = NULL;
   int32_t nx = *bucket;
   while(nx >= 0){

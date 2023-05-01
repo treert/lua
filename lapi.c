@@ -435,6 +435,7 @@ LUA_API lua_Unsigned lua_rawlen (lua_State *L, int idx) {
     case LUA_VLNGSTR: return tsvalue(o)->u.lnglen;
     case LUA_VUSERDATA: return uvalue(o)->len;
     case LUA_VTABLE: return table_count(hvalue(o));
+    case LUA_VArray: return table_count(hvalue(o));
     default: return 0;
   }
 }
@@ -772,6 +773,18 @@ LUA_API void lua_createtable (lua_State *L, int narray, int nrec) {
   api_incr_top(L);
   if (narray > 0 || nrec > 0)
     luaH_resize(L, t, narray, nrec);
+  luaC_checkGC(L);
+  lua_unlock(L);
+}
+
+LUA_API void lua_createarray (lua_State *L, int narray) {
+  Table *t;
+  lua_lock(L);
+  t = luaH_newarray(L);
+  setarrayvalue2s(L, L->top, t);
+  api_incr_top(L);
+  if (narray > 0)
+    luaH_addsize(L, t, narray);
   luaC_checkGC(L);
   lua_unlock(L);
 }

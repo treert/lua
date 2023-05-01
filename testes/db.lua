@@ -273,6 +273,9 @@ local function foo (a, ...)
   local t = table.pack(...)
   for i = 1, #t do
     local n, v = debug.getlocal(1, -i)
+    print("mylua")
+    print(n,v)
+    print(i,t[i])
     assert(n == "(vararg)" and v == t[i])
   end
   assert(not debug.getlocal(1, -(#t + 1)))

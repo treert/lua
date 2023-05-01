@@ -9,12 +9,6 @@
 
 #include "lobject.h"
 
-
-#define gnode(t,i)	((t)->node + i)
-#define gval(n)		(&(n)->i_val)
-#define gnext(n)	((n)->u.next)
-
-
 /*
 ** Clear all bits of fast-access metamethods, which means that the table
 ** may have any of these metamethods. (First access that fails after the
@@ -33,8 +27,10 @@ LUAI_FUNC void luaH_setint (lua_State *L, Table *t, lua_Integer key, TValue *val
 LUAI_FUNC void luaH_finishset (lua_State *L, Table *t, const TValue *key, const TValue *slot, TValue *value);
 
 LUAI_FUNC Table *luaH_new (lua_State *L);
+LUAI_FUNC Table *luaH_newarray (lua_State *L);
 
 LUAI_FUNC void luaH_newkey (lua_State *L, Table *t, const TValue *key, TValue *value);
+LUAI_FUNC void luaH_newarrayitem (lua_State *L, Table *t, lua_Integer idx, TValue *value);
 // should only use this func to delete (key,value)
 LUAI_FUNC void luaH_remove (Table *t, Node *node);
 

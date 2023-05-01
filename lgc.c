@@ -118,6 +118,7 @@ static void entersweep (lua_State *L);
 
 static GCObject **getgclist (GCObject *o) {
   switch (o->tt) {
+    case LUA_VArray:
     case LUA_VTABLE: return &gco2t(o)->gclist;
     case LUA_VLCL: return &gco2lcl(o)->gclist;
     case LUA_VCCL: return &gco2ccl(o)->gclist;
@@ -307,7 +308,7 @@ static void reallymarkobject (global_State *g, GCObject *o) {
       }
       /* else... */
     }  /* FALLTHROUGH */
-    case LUA_VLCL: case LUA_VCCL: case LUA_VTABLE:
+    case LUA_VLCL: case LUA_VCCL: case LUA_VTABLE: case LUA_VArray:
     case LUA_VTHREAD: case LUA_VPROTO: {
       linkobjgclist(o, g->gray);  /* to be visited later */
       break;
@@ -468,7 +469,7 @@ static int traverseephemeron (global_State *g, Table *h, int inv) {
   int hasclears = 0;  /* true if table has white keys */
   int hasww = 0;  /* true if table has entry "white-key -> white-value" */
   int i;
-  int count = h->count;
+  int count = table_maxcount(h);
   /* traverse hash part; if 'inv', traverse descending
      (see 'convergeephemerons') */
   for (i = 0; i < count; i++) {
@@ -528,7 +529,19 @@ static lu_mem traversetable (global_State *g, Table *h) {
   }
   else  /* not weak */
     traversestrongtable(g, h);
-  return 1 + 2 * h->count;
+  return 1 + 2 * table_maxcount(h);
+}
+
+// array 不支持虚表模式。没必要给实现增加复杂度
+static lu_mem traverse_array(global_State *g, Table *h) {
+  markobjectN(g, h->metatable);
+  int32_t count = table_maxcount(h);
+  while ((--count) >= 0)
+  {
+    markvalue(g, get_array_val(h, count));
+  }
+  genlink(g, obj2gco(h));
+  return 1 + 2 * table_maxcount(h);
 }
 
 
@@ -636,6 +649,7 @@ static lu_mem propagatemark (global_State *g) {
   g->gray = *getgclist(o);  /* remove from 'gray' list */
   switch (o->tt) {
     case LUA_VTABLE: return traversetable(g, gco2t(o));
+    case LUA_VArray: return traverse_array(g, gco2t(o));
     case LUA_VUSERDATA: return traverseudata(g, gco2u(o));
     case LUA_VLCL: return traverseLclosure(g, gco2lcl(o));
     case LUA_VCCL: return traverseCclosure(g, gco2ccl(o));
@@ -752,7 +766,7 @@ static void freeobj (lua_State *L, GCObject *o) {
       luaM_freemem(L, cl, sizeCclosure(cl->nupvalues));
       break;
     }
-    case LUA_VTABLE:
+    case LUA_VTABLE: case LUA_VArray:
       luaH_free(L, gco2t(o));
       break;
     case LUA_VTHREAD:

@@ -341,7 +341,7 @@ OP_EXTRAARG/*	Ax	extra (larger) argument for previous opcode	*/
   (*) In OP_RETURN, if (B == 0) then return up to 'top'.
 
   (*) In OP_LOADKX and OP_NEWTABLE, the next instruction is always
-  OP_EXTRAARG.
+  OP_EXTRAARG. mod@om 改了 Table 的实现，不需要 OP_EXTRAARG 了
 
   (*) In OP_SETLIST, if (B == 0) then real B = 'top'; if k, then
   real C = EXTRAARG _ C (the bits of EXTRAARG concatenated with the
@@ -350,6 +350,7 @@ OP_EXTRAARG/*	Ax	extra (larger) argument for previous opcode	*/
   (*) In OP_NEWTABLE, B is log2 of the hash size (which is always a
   power of 2) plus 1, or zero for size zero. If not k, the array size
   is C. Otherwise, the array size is EXTRAARG _ C.
+  mod@om 改了table的实现. rb = ceillog2(size) + 1 or 0, k is isarray
 
   (*) For comparisons, k specifies what condition the test should accept
   (true or false).

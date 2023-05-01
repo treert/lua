@@ -591,6 +591,7 @@ int luaV_equalobj (lua_State *L, const TValue *t1, const TValue *t2) {
         tm = fasttm(L, uvalue(t2)->metatable, TM_EQ);
       break;  /* will try TM */
     }
+    case LUA_VArray:
     case LUA_VTABLE: {
       if (hvalue(t1) == hvalue(t2)) return 1;
       else if (L == NULL) return 0;
@@ -740,6 +741,7 @@ void luaV_concat_old (lua_State *L, int total) {
 void luaV_objlen (lua_State *L, StkId ra, const TValue *rb) {
   const TValue *tm;
   switch (ttypetag(rb)) {
+    case LUA_VArray:
     case LUA_VTABLE: {
       Table *h = hvalue(rb);
       tm = fasttm(L, h->metatable, TM_LEN);
@@ -1459,20 +1461,28 @@ void luaV_execute (lua_State *L, CallInfo *ci) {
         vmbreak;
       }
       vmcase(OP_NEWTABLE) {
+        // mod@om
         int b = GETARG_B(i);  /* log2(hash size) + 1 */
-        int c = GETARG_C(i);  /* array size */
+        // int c = GETARG_C(i);  /* array size */
         Table *t;
         if (b > 0)
           b = 1 << (b - 1);  /* size is 2^(b - 1) */
-        lua_assert((!TESTARG_k(i)) == (GETARG_Ax(*pc) == 0));
-        if (TESTARG_k(i))  /* non-zero extra argument? */
-          c += GETARG_Ax(*pc) * (MAXARG_C + 1);  /* add it to size */
-        pc++;  /* skip extra argument */
+        // lua_assert((!TESTARG_k(i)) == (GETARG_Ax(*pc) == 0));
+        // if (TESTARG_k(i))  /* non-zero extra argument? */
+        //   c += GETARG_Ax(*pc) * (MAXARG_C + 1);  /* add it to size */
+        // pc++;  /* skip extra argument */
         L->top = ra + 1;  /* correct top in case of emergency GC */
-        t = luaH_new(L);  /* memory allocation */
-        sethvalue2s(L, ra, t);
-        if (b != 0 || c != 0)
-          luaH_resize(L, t, c, b);  /* idem */
+        if (TESTARG_k(i)) {
+          t = luaH_newarray(L);
+          setarrayvalue2s(L, ra, t);
+        }
+        else {
+          t = luaH_new(L);
+          sethvalue2s(L, ra, t);
+        }
+        if (b != 0) {
+          luaH_addsize(L, t, b);
+        }
         checkGC(L, ra + 1);
         vmbreak;
       }

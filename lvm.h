@@ -96,7 +96,8 @@ typedef enum {
 #define luaV_fastgeti(L,t,k,slot) \
   (!ttistable(t)  \
    ? (slot = NULL, 0)  /* not a table; 'slot' is NULL and result is 0 */  \
-   : (slot = luaH_getint(hvalue(t), k), \
+   : (slot = (ttisarray(t) && l_castS2U(k) - 1u < hvalue(t)->count) \
+              ? get_array_val(hvalue(t), k-1) : luaH_getint(hvalue(t), k), \
       !isempty(slot)))  /* result not empty? */
 
 // todo@om 等待 Array 实现后优化
@@ -115,8 +116,9 @@ typedef enum {
 */
 #define luaV_finishfastset(L, t, slot, value) {\
   if (ttisnil(value)){\
-    Table* table = hvalue(t);\
-    luaH_remove(table, nodefromval(slot));\
+    Table* table = hvalue(t); /* array just set nil */ \
+    if (table_isarray(table)) setnilvalue(cast(TValue *, slot)); \
+    else luaH_remove(table, nodefromval(slot));\
   }\
   else{\
     setobj2t(L, cast(TValue *, slot), value);\

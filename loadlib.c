@@ -712,7 +712,9 @@ static void createsearcherstable (lua_State *L) {
     {searcher_preload, searcher_Lua, searcher_C, searcher_Croot, NULL};
   int i;
   /* create 'searchers' table */
-  lua_createtable(L, sizeof(searchers)/sizeof(searchers[0]) - 1, 0);
+  // mod@om packge.searchers 适合用 array
+  lua_createarray(L, sizeof(searchers)/sizeof(searchers[0]) - 1);
+  // lua_createtable(L, sizeof(searchers)/sizeof(searchers[0]) - 1, 0);
   /* fill it with predefined searchers */
   for (i=0; searchers[i] != NULL; i++) {
     lua_pushvalue(L, -2);  /* set 'package' as upvalue for all searchers */

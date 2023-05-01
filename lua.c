@@ -188,6 +188,7 @@ static void createargtable (lua_State *L, char **argv, int argc, int script) {
     lua_rawseti(L, -2, i - script);
   }
   lua_setglobal(L, "arg");
+  // opt@om 也许需要增加个 argc 或者 arg.n
 }
 
 
