@@ -16,3 +16,4 @@ lua
 
 build/
 /.vscode/
+/testes/.vscode/

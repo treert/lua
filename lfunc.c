@@ -155,6 +155,7 @@ static void prepcallclosemth (lua_State *L, StkId level, int status, int yy) {
 
 
 /*
+** doc@om? 直接写成 (1ul << (sizeof(L->stack->tbclist.delta) * 8)) - 1 不就行了。为什么这么搞？
 ** Maximum value for deltas in 'tbclist', dependent on the type
 ** of delta. (This macro assumes that an 'L' is in scope where it
 ** is used.)

@@ -218,10 +218,13 @@ static void init_registry (lua_State *L, global_State *g) {
   Table *registry = luaH_new(L);
   sethvalue(L, &g->l_registry, registry);
   luaH_resize(L, registry, LUA_RIDX_LAST, 0);
+  TValue aux;
   /* registry[LUA_RIDX_MAINTHREAD] = L */
-  setthvalue(L, &registry->array[LUA_RIDX_MAINTHREAD - 1], L);
+  setthvalue(L, &aux, L);
+  luaH_setint(L, registry, LUA_RIDX_MAINTHREAD, &aux);
   /* registry[LUA_RIDX_GLOBALS] = new table (table of globals) */
-  sethvalue(L, &registry->array[LUA_RIDX_GLOBALS - 1], luaH_new(L));
+  sethvalue(L, &aux, luaH_new(L));
+  luaH_setint(L, registry, LUA_RIDX_GLOBALS, &aux);
 }
 
 

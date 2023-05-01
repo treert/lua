@@ -434,7 +434,7 @@ LUA_API lua_Unsigned lua_rawlen (lua_State *L, int idx) {
     case LUA_VSHRSTR: return tsvalue(o)->shrlen;
     case LUA_VLNGSTR: return tsvalue(o)->u.lnglen;
     case LUA_VUSERDATA: return uvalue(o)->len;
-    case LUA_VTABLE: return luaH_getn(hvalue(o));
+    case LUA_VTABLE: return table_count(hvalue(o));
     default: return 0;
   }
 }
@@ -659,13 +659,13 @@ l_sinline int auxgetstr (lua_State *L, const TValue *t, const char *k) {
 
 
 /*
+** opt@om 之前的实现可以直接读取array，现在不行了。
 ** Get the global table in the registry. Since all predefined
 ** indices in the registry were inserted right when the registry
 ** was created and never removed, they must always be in the array
 ** part of the registry.
 */
-#define getGtable(L)  \
-	(&hvalue(&G(L)->l_registry)->array[LUA_RIDX_GLOBALS - 1])
+#define getGtable(L) (luaH_getint(hvalue(&G(L)->l_registry), LUA_RIDX_GLOBALS))
 
 
 LUA_API int lua_getglobal (lua_State *L, const char *name) {
@@ -1253,7 +1253,7 @@ LUA_API int lua_error (lua_State *L) {
   return 0;  /* to avoid warnings */
 }
 
-
+// todo@om next 留下在只是为了兼容
 LUA_API int lua_next (lua_State *L, int idx) {
   Table *t;
   int more;

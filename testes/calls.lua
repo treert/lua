@@ -183,7 +183,7 @@ do  -- testing chains of '__call'
 
   local Res = u("a", "b", "c")
 
-  assert(Res.n == N + 3)
+  assert(#Res == N + 3)
   for i = 1, N do
     assert(Res[i][1] == i)
   end

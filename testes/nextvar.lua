@@ -299,7 +299,8 @@ checknext{1,2,3,4,x=1,y=2,z=3}
 checknext{1,2,3,4,5,x=1,y=2,z=3}
 
 assert(#{} == 0)
-assert(#{[-1] = 2} == 0)
+-- compat@om # 现在返回实际大小了
+assert(#{[-1] = 2} == 1)
 for i=0,40 do
   local a = {}
   for j=1,i do a[j]=j end
@@ -326,7 +327,8 @@ table.maxn = nil
 -- int overflow
 a = {}
 for i=0,50 do a[2^i] = true end
-assert(a[#a])
+-- compat@om table 现在是纯粹的hash表
+assert(a[#a] == nil)
 
 print('+')
 
@@ -419,7 +421,8 @@ local function test (a)
   assert(table.remove(a) == nil)
   assert(table.remove(a, #a) == nil)
 end
-
+-- compat@om table是纯hash表。table.insert remove 的行为很不兼容了。想废掉他。以后会有array.insert remove
+--[[
 a = {n=0, [-7] = "ban"}
 test(a)
 assert(a.n == 0 and a[-7] == "ban")
@@ -434,7 +437,8 @@ assert(#a == 0 and table.remove(a) == nil and a[-1] == "ban")
 
 a = {[0] = "ban"}
 assert(#a == 0 and table.remove(a) == "ban" and a[0] == undef)
-
+]]
+a = {}
 table.insert(a, 1, 10); table.insert(a, 1, 20); table.insert(a, 1, -1)
 assert(table.remove(a) == 10)
 assert(table.remove(a) == 20)
@@ -744,7 +748,9 @@ assert(x == 5)
 a = {}
 do
   local x,y,z = pairs(a)
-  assert(type(x) == 'function' and y == a and z == nil)
+  -- compat@om pairs(t) => t
+  assert(x == a and y == nil and z == nil)
+--   assert(type(x) == 'function' and y == a and z == nil)
 end
 
 local function foo (e,i)

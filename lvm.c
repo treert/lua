@@ -45,9 +45,6 @@
 
 
 
-/* limit for table tag-method chains (to avoid infinite loops) */
-#define MAXTAGLOOP	2000
-
 
 /*
 ** 'l_intfitsf' checks whether a given integer is in the range that
@@ -634,7 +631,7 @@ static void copy2buff (StkId top, int n, char *buff) {
 LUALIB_API const char* (luaL_tolstring)(lua_State* L, int idx, size_t* len);
 // luaB_tostring 复制过来了
 static int my_tostring_func(lua_State* L) {
-  lua_assert(lua_type(L, arg) != LUA_TNONE);
+  lua_assert(lua_type(L, 1) != LUA_TNONE);
 	//luaL_checkany(L, 1);
   luaL_tolstring(L, 1, NULL);
   return 1;
@@ -747,7 +744,7 @@ void luaV_objlen (lua_State *L, StkId ra, const TValue *rb) {
       Table *h = hvalue(rb);
       tm = fasttm(L, h->metatable, TM_LEN);
       if (tm) break;  /* metamethod? break switch to call it */
-      setivalue(s2v(ra), luaH_getn(h));  /* else primitive len */
+      setivalue(s2v(ra), table_count(h));  /* else primitive len */
       return;
     }
     case LUA_VSHRSTR: {
@@ -898,7 +895,7 @@ static void adjust_named_args(lua_State *L, StkId func, int all, int num) {
         for (int k = num - 2; k >= 0; k -= 2) {
           TString* inname = tsvalue(s2v(namedbase + k));
           if (luaS_eqstr(argname, inname)) {
-            setobj(NULL, &namedvalues[i], s2v(namedbase + k + 1));
+            setobj(L, &namedvalues[i], s2v(namedbase + k + 1));
             goto NextArg;
           }
         }
@@ -908,7 +905,7 @@ static void adjust_named_args(lua_State *L, StkId func, int all, int num) {
       for (int i = 0; i < fixparams; i++)
       {
         if(rawtt(&namedvalues[i]) != LUA_TNONE_BYTE){
-          setobj(NULL, s2v(argbase + i), &namedvalues[i]);
+          setobj(L, s2v(argbase + i), &namedvalues[i]);
         }
         else{
           if (i >= arrnum) {
@@ -1372,7 +1369,7 @@ void luaV_execute (lua_State *L, CallInfo *ci) {
         const TValue *slot;
         TValue *rb = vRB(i);
         TValue *rc = vRC(i);
-        lua_Unsigned n;
+        lua_Integer n;
         if (ttisinteger(rc)  /* fast track for integers? */
             ? (cast_void(n = ivalue(rc)), luaV_fastgeti(L, rb, n, slot))
             : luaV_fastget(L, rb, rc, slot, luaH_get)) {
@@ -1888,6 +1885,17 @@ void luaV_execute (lua_State *L, CallInfo *ci) {
       vmcase(OP_TFORPREP) {
         /* create to-be-closed upvalue (if needed) */
         halfProtect(luaF_newtbcupval(L, ra + 3));
+        // 特殊支持 for k,v in t do ... end
+        if(ttistable(s2v(ra))){
+          Table *t = hvalue(s2v(ra));
+          if (table_count(t) > 0){
+            setivalue(s2v(ra+1), 0);
+          }
+          else{
+            pc += GETARG_Bx(i) + 2;  /* skip the loop */
+            vmbreak;
+          }
+        }
         pc += GETARG_Bx(i);
         i = *(pc++);  /* go to next instruction */
         lua_assert(GET_OPCODE(i) == OP_TFORCALL && ra == RA(i));
@@ -1895,6 +1903,24 @@ void luaV_execute (lua_State *L, CallInfo *ci) {
       }
       vmcase(OP_TFORCALL) {
        l_tforcall:
+        if(ttistable(s2v(ra))){
+          // 特殊支持 for k,v in t do ... end
+          Table *t = hvalue(s2v(ra));
+          int32_t idx = (int32_t)ivalue(s2v(ra+1));  /* itor index */
+          idx = luaH_itor_next(L, t, idx, ra+4);
+          if (idx >= 0) {
+            lua_assert(idx > 0);
+            chgivalue(s2v(ra+1), idx);  /* update itor index */
+            lua_assert(GET_OPCODE(*pc) == OP_TFORLOOP);
+            pc -= GETARG_Bx(*pc) - 1;  /* jump back */
+          }
+          else{
+            lua_assert(GET_OPCODE(*pc) == OP_TFORLOOP);
+            pc++;// skip OP_TFORLOOP, exit loop
+          }
+          updatetrap(ci);  /* allows a signal to break the loop */
+          vmbreak;
+        }
         /* 'ra' has the iterator function, 'ra + 1' has the state,
            'ra + 2' has the control variable, and 'ra + 3' has the
            to-be-closed variable. The call will use the stack after
@@ -1910,7 +1936,7 @@ void luaV_execute (lua_State *L, CallInfo *ci) {
         goto l_tforloop;
       }
       vmcase(OP_TFORLOOP) {
-        l_tforloop:
+        l_tforloop:// 存在的目的，是因为 for in 的函数调用可能会中断
         if (!ttisnil(s2v(ra + 4))) {  /* continue loop? */
           setobjs2s(L, ra + 2, ra + 4);  /* save control variable */
           pc -= GETARG_Bx(i);  /* jump back */
@@ -1925,17 +1951,14 @@ void luaV_execute (lua_State *L, CallInfo *ci) {
           n = cast_int(L->top - ra) - 1;  /* get up to the top */
         else
           L->top = ci->top;  /* correct top in case of emergency GC */
-        last += n;
         if (TESTARG_k(i)) {
           last += GETARG_Ax(*pc) * (MAXARG_C + 1);
           pc++;
         }
-        if (last > luaH_realasize(h))  /* needs more space? */
-          luaH_resizearray(L, h, last);  /* preallocate it at once */
-        for (; n > 0; n--) {
-          TValue *val = s2v(ra + n);
-          setobj2t(L, &h->array[last - 1], val);
-          last--;
+        luaH_addsize(L, h, n);
+        for (int idx=1; idx <= n; idx++){
+          TValue *val = s2v(ra + idx);
+          luaH_setint(L, h, last + idx, val);
           luaC_barrierback(L, obj2gco(h), val);
         }
         vmbreak;

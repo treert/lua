@@ -357,22 +357,22 @@ static void checkvalref (global_State *g, GCObject *f, const TValue *t) {
 
 
 static void checktable (global_State *g, Table *h) {
-  unsigned int i;
-  unsigned int asize = luaH_realasize(h);
-  Node *n, *limit = gnode(h, sizenode(h));
-  GCObject *hgc = obj2gco(h);
-  checkobjrefN(g, hgc, h->metatable);
-  for (i = 0; i < asize; i++)
-    checkvalref(g, hgc, &h->array[i]);
-  for (n = gnode(h, 0); n < limit; n++) {
-    if (!isempty(gval(n))) {
-      TValue k;
-      getnodekey(g->mainthread, &k, n);
-      assert(!keyisnil(n));
-      checkvalref(g, hgc, &k);
-      checkvalref(g, hgc, gval(n));
-    }
-  }
+  // unsigned int i;
+  // unsigned int asize = table_count(h);
+  // Node *n, *limit = gnode(h, sizenode(h));
+  // GCObject *hgc = obj2gco(h);
+  // checkobjrefN(g, hgc, h->metatable);
+  // for (i = 0; i < asize; i++)
+  //   checkvalref(g, hgc, &h->array[i]);
+  // for (n = gnode(h, 0); n < limit; n++) {
+  //   if (!isempty(gval(n))) {
+  //     TValue k;
+  //     getnodekey(g->mainthread, &k, n);
+  //     assert(!keyisnil(n));
+  //     checkvalref(g, hgc, &k);
+  //     checkvalref(g, hgc, gval(n));
+  //   }
+  // }
 }
 
 
@@ -972,7 +972,6 @@ static int hash_query (lua_State *L) {
     Table *t;
     luaL_checktype(L, 2, LUA_TTABLE);
     t = hvalue(obj_at(L, 2));
-    lua_pushinteger(L, luaH_mainposition(t, o) - t->node);
   }
   return 1;
 }
@@ -990,41 +989,39 @@ static int stacklevel (lua_State *L) {
 
 
 static int table_query (lua_State *L) {
-  const Table *t;
-  int i = cast_int(luaL_optinteger(L, 2, -1));
-  unsigned int asize;
-  luaL_checktype(L, 1, LUA_TTABLE);
-  t = hvalue(obj_at(L, 1));
-  asize = luaH_realasize(t);
-  if (i == -1) {
-    lua_pushinteger(L, asize);
-    lua_pushinteger(L, allocsizenode(t));
-    lua_pushinteger(L, isdummy(t) ? 0 : t->lastfree - t->node);
-    lua_pushinteger(L, t->alimit);
-    return 4;
-  }
-  else if ((unsigned int)i < asize) {
-    lua_pushinteger(L, i);
-    pushobject(L, &t->array[i]);
-    lua_pushnil(L);
-  }
-  else if ((i -= asize) < sizenode(t)) {
-    TValue k;
-    getnodekey(L, &k, gnode(t, i));
-    if (!isempty(gval(gnode(t, i))) ||
-        ttisnil(&k) ||
-        ttisnumber(&k)) {
-      pushobject(L, &k);
-    }
-    else
-      lua_pushliteral(L, "<undef>");
-    pushobject(L, gval(gnode(t, i)));
-    if (gnext(&t->node[i]) != 0)
-      lua_pushinteger(L, gnext(&t->node[i]));
-    else
-      lua_pushnil(L);
-  }
-  return 3;
+  return 0;
+  // const Table *t;
+  // int i = cast_int(luaL_optinteger(L, 2, -1));
+  // unsigned int asize;
+  // luaL_checktype(L, 1, LUA_TTABLE);
+  // t = hvalue(obj_at(L, 1));
+  // asize = table_count(t);
+  // if (i == -1) {
+  //   lua_pushinteger(L, asize);
+  //   return 4;
+  // }
+  // else if ((unsigned int)i < asize) {
+  //   lua_pushinteger(L, i);
+  //   pushobject(L, &t->array[i]);
+  //   lua_pushnil(L);
+  // }
+  // else if ((i -= asize) < sizenode(t)) {
+  //   TValue k;
+  //   getnodekey(L, &k, gnode(t, i));
+  //   if (!isempty(gval(gnode(t, i))) ||
+  //       ttisnil(&k) ||
+  //       ttisnumber(&k)) {
+  //     pushobject(L, &k);
+  //   }
+  //   else
+  //     lua_pushliteral(L, "<undef>");
+  //   pushobject(L, gval(gnode(t, i)));
+  //   if (gnext(&t->node[i]) != 0)
+  //     lua_pushinteger(L, gnext(&t->node[i]));
+  //   else
+  //     lua_pushnil(L);
+  // }
+  // return 3;
 }
 
 

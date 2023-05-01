@@ -2,10 +2,14 @@
 -- $Id: testes/all.lua $
 -- See Copyright Notice at the end of this file
 
+if arg[1] == 'debug' then
+    require("LuaPanda").start("127.0.0.1",8818);
+end
 
 local version = "Lua 5.4"
 -- mod@om
 local io = io -- 不明白啊，最后的的全局io获取不到了。而且这一行和print放一起也不行。
+print("start test")
 --
 if _VERSION ~= version then
   io.stderr:write("This test suite is for ", version,

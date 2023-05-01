@@ -208,10 +208,6 @@ typedef StackValue *StkId;
 #define ABSTKEYCONSTANT		{NULL}, LUA_VABSTKEY
 
 
-/* mark an entry as empty */
-#define setempty(v)		settt_(v, LUA_VEMPTY)
-
-
 
 /* }================================================================== */
 
@@ -664,8 +660,12 @@ typedef union Closure {
 */
 
 #define LUA_VTABLE	makevariant(LUA_TTABLE, 0)
+// todo@om Array
+#define LUA_VArray  makevariant(LUA_TTABLE, 1)
 
 #define ttistable(o)		checktag((o), ctb(LUA_VTABLE))
+#define ttisarray(o)    checktag((o), ctb(LUA_VArray))
+#define ttishash(o)     checktag((o), ctb(LUA_VTABLE))
 
 #define hvalue(o)	check_exp(ttistable(o), gco2t(val_(o).gc))
 
@@ -694,6 +694,8 @@ typedef union Node {
   TValue i_val;  /* direct access to node's value as a proper 'TValue' */
 } Node;
 
+/* returns the Node, given the value of a table entry */
+#define nodefromval(v)	cast(Node *, (v))
 
 /* copy a value into a key */
 #define setnodekey(L,node,obj) \
@@ -709,20 +711,18 @@ typedef union Node {
 	  checkliveness(L,io_); }
 
 
-/*
-** About 'alimit': if 'isrealasize(t)' is true, then 'alimit' is the
-** real size of 'array'. Otherwise, the real size of 'array' is the
-** smallest power of two not smaller than 'alimit' (or zero iff 'alimit'
-** is zero); 'alimit' is then used as a hint for #t.
-*/
+/* limit for table tag-method chains (to avoid infinite loops) */
+#define MAXTAGLOOP	2000
 
-#define BITRAS		(1 << 7)
-#define isrealasize(t)		(!((t)->flags & BITRAS))
-#define setrealasize(t)		((t)->flags &= cast_byte(~BITRAS))
-#define setnorealasize(t)	((t)->flags |= BITRAS)
-
-// 支持固定的31种长度
+// 支持固定的若干种长度，2**lsizenode。【todo@om 应该和 size_t 相匹配，30在32位平台上太大了】
 #define MAX_LOG_SIZE 30
+#define table_count(t)    ((t)->count - (t)->freecount)
+
+/*
+** one after last element in a hash array
+*/
+#define gnodelast(h)	gnode(h, (h)->count)
+
 /*
 ** define Table as A pure Hash Table.
 ** 1. 如果没有删除操作。插入顺序和遍历顺序一致。【即便有删除操作，也可以推断出顺序，但是这和实际实现密切相关】
@@ -731,9 +731,7 @@ typedef struct Table {
   CommonHeader;
   lu_byte flags;  /* 1<<p means tagmethod(p) is not present */
   lu_byte lsizenode;  /* log2 of size of 'node' array */
-  unsigned int alimit;  /* "limit" of 'array' array */
-  TValue *array;  /* array part */
-  Node *lastfree;  /* any free position is before this position */
+  
   int32_t count;// valided element num = count - freecount
   int32_t freecount;
   int32_t freelist;
@@ -783,7 +781,7 @@ typedef struct Table {
 	(check_exp((size&(size-1))==0, (cast_int((s) & ((size)-1)))))
 
 
-#define twoto(x)	(1<<(x))
+#define twoto(x)	((size_t)(1<<(x)))
 #define sizenode(t)	(twoto((t)->lsizenode))
 
 

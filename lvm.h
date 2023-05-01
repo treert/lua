@@ -96,21 +96,33 @@ typedef enum {
 #define luaV_fastgeti(L,t,k,slot) \
   (!ttistable(t)  \
    ? (slot = NULL, 0)  /* not a table; 'slot' is NULL and result is 0 */  \
-   : (slot = (l_castS2U(k) - 1u < hvalue(t)->alimit) \
-              ? &hvalue(t)->array[k - 1] : luaH_getint(hvalue(t), k), \
+   : (slot = luaH_getint(hvalue(t), k), \
       !isempty(slot)))  /* result not empty? */
+
+// todo@om 等待 Array 实现后优化
+// #define luaV_fastgeti(L,t,k,slot) \
+//   (!ttistable(t)  \
+//    ? (slot = NULL, 0)  /* not a table; 'slot' is NULL and result is 0 */  \
+//    : (slot = (l_castS2U(k) - 1u < hvalue(t)->alimit) \
+//               ? &hvalue(t)->array[k - 1] : luaH_getint(hvalue(t), k), \
+//       !isempty(slot)))  /* result not empty? */
 
 
 /*
+** doc@om 还是C++的模板好用呀
 ** Finish a fast set operation (when fast get succeeds). In that case,
 ** 'slot' points to the place to put the value.
 */
-#define luaV_finishfastset(L,t,slot,v) \
-    { setobj2t(L, cast(TValue *,slot), v); \
-      luaC_barrierback(L, gcvalue(t), v); }
-
-
-
+#define luaV_finishfastset(L, t, slot, value) {\
+  if (ttisnil(value)){\
+    Table* table = hvalue(t);\
+    luaH_remove(table, nodefromval(slot));\
+  }\
+  else{\
+    setobj2t(L, cast(TValue *, slot), value);\
+    luaC_barrierback(L, gcvalue(t), value);\
+  }\
+}
 
 LUAI_FUNC int luaV_equalobj (lua_State *L, const TValue *t1, const TValue *t2);
 LUAI_FUNC int luaV_lessthan (lua_State *L, const TValue *l, const TValue *r);

@@ -143,7 +143,8 @@ t.__le = f("le")
 
 
 local function checkcap (t)
-  assert(#cap + 1 == #t)
+  -- compat@om mylua 的 # 返回table的实际大小
+  assert(#cap == #t)
   for i = 1, #t do
     assert(cap[i - 1] == t[i])
     assert(math.type(cap[i - 1]) == math.type(t[i]))

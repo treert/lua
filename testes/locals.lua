@@ -828,7 +828,9 @@ do
       extrares = co()    -- runs until first (extra) yield
     end
     local res = table.pack(co())   -- runs until yield inside '__close'
-    assert(res.n == 2 and res[2] == nil)
+    -- todo@om 修改了实现。以后增加Array支持后，可能还会修改下
+    assert(#res == 1 and res[2] == nil)
+    -- assert(#res == 2 and res[2] == nil)
     local res2 = table.pack(co())   -- runs until end of function
     assert(res2.n == t.n)
     for i = 1, #t do

@@ -76,17 +76,18 @@ do   -- length is not an integer
   checkerror("object length is not an integer", table.insert, t, 1)
 end
 
+-- compat@om mylua pack 不再添加 n 了
 print "testing pack"
 
 a = table.pack()
-assert(a[1] == undef and a.n == 0) 
+assert(a[1] == undef and #a == 0) 
 
 a = table.pack(table)
-assert(a[1] == table and a.n == 1)
+assert(a[1] == table and #a == 1)
 
+-- compat@om mylua 中 table不存在问题。不过后面改成array实现后，这个 #a == 4
 a = table.pack(nil, nil, nil, nil)
-assert(a[1] == nil and a.n == 4)
-
+assert(a[1] == nil and #a == 0)
 
 -- testing move
 do
@@ -289,7 +290,7 @@ timesort(a, limit,  function(x,y) return nil end, "equal")
 
 for i,v in pairs(a) do assert(v == false) end
 
-A = {"�lo", "\0first :-)", "alo", "then this one", "45", "and a new"}
+A = {"�lo", "\0first :-)", "alo", "then this one", "45", "and a new"}
 table.sort(A)
 check(A)
 

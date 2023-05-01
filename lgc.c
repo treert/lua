@@ -116,12 +116,6 @@ static void entersweep (lua_State *L);
 */
 
 
-/*
-** one after last element in a hash array
-*/
-#define gnodelast(h)	gnode(h, cast_sizet(sizenode(h)))
-
-
 static GCObject **getgclist (GCObject *o) {
   switch (o->tt) {
     case LUA_VTABLE: return &gco2t(o)->gclist;
@@ -441,11 +435,9 @@ static void traverseweakvalue (global_State *g, Table *h) {
   Node *n, *limit = gnodelast(h);
   /* if there is array part, assume it may have white values (it is not
      worth traversing it now just to check) */
-  int hasclears = (h->alimit > 0);
+  int hasclears = 0;
   for (n = gnode(h, 0); n < limit; n++) {  /* traverse hash part */
-    if (isempty(gval(n)))  /* entry is empty? */
-      clearkey(n);  /* clear its key */
-    else {
+    if (!isempty(gval(n))) {
       lua_assert(!keyisnil(n));
       markkey(g, n);
       if (!hasclears && iscleared(g, gcvalueN(gval(n))))  /* a white value? */
@@ -475,23 +467,15 @@ static int traverseephemeron (global_State *g, Table *h, int inv) {
   int marked = 0;  /* true if an object is marked in this traversal */
   int hasclears = 0;  /* true if table has white keys */
   int hasww = 0;  /* true if table has entry "white-key -> white-value" */
-  unsigned int i;
-  unsigned int asize = luaH_realasize(h);
-  unsigned int nsize = sizenode(h);
-  /* traverse array part */
-  for (i = 0; i < asize; i++) {
-    if (valiswhite(&h->array[i])) {
-      marked = 1;
-      reallymarkobject(g, gcvalue(&h->array[i]));
-    }
-  }
+  int i;
+  int count = h->count;
   /* traverse hash part; if 'inv', traverse descending
      (see 'convergeephemerons') */
-  for (i = 0; i < nsize; i++) {
-    Node *n = inv ? gnode(h, nsize - 1 - i) : gnode(h, i);
-    if (isempty(gval(n)))  /* entry is empty? */
-      clearkey(n);  /* clear its key */
-    else if (iscleared(g, gckeyN(n))) {  /* key is not marked (yet)? */
+  for (i = 0; i < count; i++) {
+    Node *n = inv ? gnode(h, count - 1 - i) : gnode(h, i);
+    if(isempty(gval(n))) continue;
+    lua_assert(!keyisnil(n));
+    if (iscleared(g, gckeyN(n))) {  /* key is not marked (yet)? */
       hasclears = 1;  /* table must be cleared */
       if (valiswhite(gval(n)))  /* value not marked yet? */
         hasww = 1;  /* white-white entry */
@@ -516,14 +500,8 @@ static int traverseephemeron (global_State *g, Table *h, int inv) {
 
 static void traversestrongtable (global_State *g, Table *h) {
   Node *n, *limit = gnodelast(h);
-  unsigned int i;
-  unsigned int asize = luaH_realasize(h);
-  for (i = 0; i < asize; i++)  /* traverse array part */
-    markvalue(g, &h->array[i]);
   for (n = gnode(h, 0); n < limit; n++) {  /* traverse hash part */
-    if (isempty(gval(n)))  /* entry is empty? */
-      clearkey(n);  /* clear its key */
-    else {
+    if (!isempty(gval(n))){
       lua_assert(!keyisnil(n));
       markkey(g, n);
       markvalue(g, gval(n));
@@ -550,7 +528,7 @@ static lu_mem traversetable (global_State *g, Table *h) {
   }
   else  /* not weak */
     traversestrongtable(g, h);
-  return 1 + h->alimit + 2 * allocsizenode(h);
+  return 1 + 2 * h->count;
 }
 
 
@@ -713,7 +691,6 @@ static void convergeephemerons (global_State *g) {
 ** =======================================================
 */
 
-
 /*
 ** clear entries with unmarked keys from all weaktables in list 'l'
 */
@@ -723,10 +700,10 @@ static void clearbykeys (global_State *g, GCObject *l) {
     Node *limit = gnodelast(h);
     Node *n;
     for (n = gnode(h, 0); n < limit; n++) {
-      if (iscleared(g, gckeyN(n)))  /* unmarked key? */
-        setempty(gval(n));  /* remove entry */
-      if (isempty(gval(n)))  /* is entry empty? */
-        clearkey(n);  /* clear its key */
+      if (!isempty(gval(n))){
+        if (iscleared(g, gckeyN(n)))  /* unmarked key? */
+          luaH_remove(h, n);
+      }
     }
   }
 }
@@ -740,18 +717,11 @@ static void clearbyvalues (global_State *g, GCObject *l, GCObject *f) {
   for (; l != f; l = gco2t(l)->gclist) {
     Table *h = gco2t(l);
     Node *n, *limit = gnodelast(h);
-    unsigned int i;
-    unsigned int asize = luaH_realasize(h);
-    for (i = 0; i < asize; i++) {
-      TValue *o = &h->array[i];
-      if (iscleared(g, gcvalueN(o)))  /* value was collected? */
-        setempty(o);  /* remove entry */
-    }
     for (n = gnode(h, 0); n < limit; n++) {
-      if (iscleared(g, gcvalueN(gval(n))))  /* unmarked value? */
-        setempty(gval(n));  /* remove entry */
-      if (isempty(gval(n)))  /* is entry empty? */
-        clearkey(n);  /* clear its key */
+      if (!isempty(gval(n))){
+        if (iscleared(g, gcvalueN(gval(n))))  /* unmarked value? */
+          luaH_remove(h, n);
+      }
     }
   }
 }

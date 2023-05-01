@@ -1,5 +1,9 @@
 [my lua](./doc/mylua.md)
 --------
+## todo
+- [ ] 实现 Array。【现在的想法，Array作为table变种存在。实现一个非常简单的】
+- [ ] 优化 table.sort, 添加 table.keysort array.sort。【lua原先的实现能支持】
+
 ## 增量修改，兼容性很高
 - 增加了 continue 关键字。
 - 增加了一批 `$string $function` 的语法糖
@@ -12,7 +16,9 @@
 
 ## 不兼容修改
 - __concat 废弃了。`$string`的实现复用了`OP_CONCAT`指令，修改了 concat 的实现。
-- 替换掉Table的实现
+- 替换掉 Table 的实现。现在table是纯粹的HashTable了。
+- 一些被修改了的 API
+  - table.pack 不再填充 n 字段了。现在`#t`可以快速获得table大小，是hashtable里实际元素的个数。
 
 # Lua Official
 
