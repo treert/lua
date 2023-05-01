@@ -21,6 +21,64 @@
 - 一些被修改了的 API
   - table.pack 不再填充 n 字段了。
 
+## 性能
+mylua 优化了table的遍历。【sort之类的也准备优化下】
+[test-performance.lua](./testes/test-performance.lua)
+
+```lua
+--[[
+测试规模：table_size=1000_000 for_loop=100。PS: lua没有array
+测试耗时(mylua/lua)：
+    for in                   => 20%
+    init map                 => 210%(300% Debug)
+    init array / lua map     => 110%(130% Debug)
+
+具体数据：
+cmake --config Debug:
+mylua:
+int array cost 0.024s
+for array cost 0.658s
+init map cost 0.055s
+for map cost 0.683s
+lua:
+init map cost 0.018s
+for map cost 3.799s
+
+cmake --config Relese：
+mylua:
+int array cost 0.011s
+for array cost 0.274s
+init map cost 0.021s
+for map cost 0.287s
+lua:
+init map cost 0.010s
+for map cost 1.486s
+]]
+
+-- 可以lua运行的测试代码。默认的size和loop太小了，没什么区分度。
+local size,loop = tonumber(arg[1]) or 1000,tonumber(arg[2]) or 1000
+
+local t1 = os.clock()
+local tt = {}
+for i = 1, size do
+    tt[i] = i
+end
+print(string.format("init map cost %.3fs",os.clock()-t1))
+assert(#tt == size)
+
+local count = 0
+local t1 = os.clock()
+for i = 1, loop do
+    for k,v in pairs(tt) do
+        -- count = count + k + v
+    end
+end
+print(string.format("for map cost %.3fs",os.clock()-t1))
+-- assert(count == loop*(size + 1)*size)
+
+print("start end")
+```
+
 # Lua Official
 
 This is the repository of Lua development code, as seen by the Lua team. It contains the full history of all commits but is mirrored irregularly. For complete information about Lua, visit [Lua.org](https://www.lua.org/).

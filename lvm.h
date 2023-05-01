@@ -96,16 +96,20 @@ typedef enum {
 #define luaV_fastgeti(L,t,k,slot) \
   (!ttistable(t)  \
    ? (slot = NULL, 0)  /* not a table; 'slot' is NULL and result is 0 */  \
-   : (slot = (ttisarray(t) && l_castS2U(k) - 1u < hvalue(t)->count) \
-              ? get_array_val(hvalue(t), k-1) : luaH_getint(hvalue(t), k), \
+   : (slot = luaH_getint(hvalue(t), k),\
       !isempty(slot)))  /* result not empty? */
 
-// todo@om 等待 Array 实现后优化
+// #define luaV_fastgeti(L,t,k,slot) \
+//   ((ttisarray(t) && l_castS2U(k) - 1u < hvalue(t)->count) \
+//     ? (slot = get_array_val(hvalue(t), k-1), !isempty(slot)) \
+//     : (!ttistable(t) ? (slot = NULL, 0) \
+//                     : (slot = luaH_getint(hvalue(t), k), !isempty(slot))))
+// opt@om 实际测试，感觉没多大优化。
 // #define luaV_fastgeti(L,t,k,slot) \
 //   (!ttistable(t)  \
 //    ? (slot = NULL, 0)  /* not a table; 'slot' is NULL and result is 0 */  \
-//    : (slot = (l_castS2U(k) - 1u < hvalue(t)->alimit) \
-//               ? &hvalue(t)->array[k - 1] : luaH_getint(hvalue(t), k), \
+//    : (slot = (ttisarray(t) && l_castS2U(k) - 1u < hvalue(t)->count) \
+//               ? get_array_val(hvalue(t), k-1) : luaH_getint(hvalue(t), k), \
 //       !isempty(slot)))  /* result not empty? */
 
 

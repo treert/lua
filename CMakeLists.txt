@@ -25,7 +25,7 @@ set ( SRC_LUA lua.c )
 set ( SRC_LUAC luac.c )
 
 add_definitions(-DLUAI_MAXCCALLS=128) # windows 上 cstack.lua 溢出报错
-add_compile_definitions( LUAI_ASSERT )
+# add_compile_definitions( LUAI_ASSERT )
 
 add_library ( liblua ${SRC_CORE} ${SRC_HEADER} )
 set_target_properties ( liblua PROPERTIES OUTPUT_NAME lua )
