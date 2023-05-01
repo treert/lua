@@ -80,7 +80,12 @@ const TValue *luaT_gettmbyobj (lua_State *L, const TValue *o, TMS event) {
     default:
       mt = G(L)->mt[ttype(o)];
   }
-  return (mt ? luaH_getshortstr(mt, G(L)->tmname[event]) : &G(L)->nilvalue);
+  // fix@om lua官方也有问题。会返回 abstkey
+  if(mt){
+    const TValue* slot = luaH_getshortstr(mt, G(L)->tmname[event]);
+    return isabstkey(slot) ? &G(L)->nilvalue : slot;
+  }
+  return &G(L)->nilvalue;
 }
 
 

@@ -634,7 +634,7 @@ static void copy2buff (StkId top, int n, char *buff) {
 LUALIB_API const char* (luaL_tolstring)(lua_State* L, int idx, size_t* len);
 // luaB_tostring 复制过来了
 static int my_tostring_func(lua_State* L) {
-  lua_assert(lua_type(L, arg) != LUA_TNONE);
+  lua_assert(lua_type(L, 1) != LUA_TNONE);
 	//luaL_checkany(L, 1);
   luaL_tolstring(L, 1, NULL);
   return 1;
@@ -898,7 +898,7 @@ static void adjust_named_args(lua_State *L, StkId func, int all, int num) {
         for (int k = num - 2; k >= 0; k -= 2) {
           TString* inname = tsvalue(s2v(namedbase + k));
           if (luaS_eqstr(argname, inname)) {
-            setobj(NULL, &namedvalues[i], s2v(namedbase + k + 1));
+            setobj(L, &namedvalues[i], s2v(namedbase + k + 1));
             goto NextArg;
           }
         }
@@ -908,7 +908,7 @@ static void adjust_named_args(lua_State *L, StkId func, int all, int num) {
       for (int i = 0; i < fixparams; i++)
       {
         if(rawtt(&namedvalues[i]) != LUA_TNONE_BYTE){
-          setobj(NULL, s2v(argbase + i), &namedvalues[i]);
+          setobj(L, s2v(argbase + i), &namedvalues[i]);
         }
         else{
           if (i >= arrnum) {
