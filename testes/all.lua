@@ -186,6 +186,7 @@ end
 dofile('continue.lua')
 dofile('dollarext.lua')
 dofile("func-named-args.lua")
+dofile('array.lua')
 --
 dofile('gengc.lua')
 assert(dofile('locals.lua') == 5)

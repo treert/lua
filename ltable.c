@@ -335,7 +335,8 @@ void luaH_addsize (lua_State *L, Table *t, int32_t addsize){
     size_t newsize = getarraymemsize(lsize);
     t->data = (Node*)luaM_realloc(L, t->data, oldsize, newsize);
     t->lsizenode = lsize;
-    // array do nothing, just return
+    // fill nil
+    memset((int8_t*)t->data + oldsize, 0, newsize - oldsize);
     return;
   }
   // for map

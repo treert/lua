@@ -1014,7 +1014,7 @@ static void array_constructor(LexState *ls, expdesc *t) {
   checknext(ls, '[');
   do {
     lua_assert(cc.v.k == VVOID || cc.tostore > 0);
-    if (ls->t.token == '}') break;
+    if (ls->t.token == ']') break;
     closelistfield(fs, &cc);
     field(ls, &cc);
   } while (testnext(ls, ',') || testnext(ls, ';'));
