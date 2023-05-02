@@ -3,6 +3,7 @@ print($"start test performance, size=$size loop=$loop")
 
 
 local t1 = os.clock()
+-- local arr = table.newarray(size) 
 local arr = []
 for i = 1, size do
     arr[i] = i
@@ -23,6 +24,7 @@ print(string.format("for array cost %.3fs",os.clock()-t1))
 
 
 local t1 = os.clock()
+-- local tt = table.newmap(size) -- 会快一些
 local tt = {}
 for i = 1, size do
     tt[i] = i

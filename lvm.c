@@ -62,7 +62,7 @@
 ** sizeof(long) == 32.)
 */
 #if ((((LUA_MAXINTEGER >> (NBM / 4)) >> (NBM / 4)) >> (NBM / 4)) \
-	>> (NBM - (3 * (NBM / 4))))  >  0
+  >> (NBM - (3 * (NBM / 4))))  >  0
 
 /* limit for integers that fit in a float */
 #define MAXINTFITSF	((lua_Unsigned)1 << NBM)
@@ -614,7 +614,7 @@ int luaV_equalobj (lua_State *L, const TValue *t1, const TValue *t2) {
 
 /* macro used by 'luaV_concat' to ensure that element at 'o' is a string */
 #define tostring(L,o)  \
-	(ttisstring(o) || (cvt2str(o) && (luaO_tostring(L, o), 1)))
+  (ttisstring(o) || (cvt2str(o) && (luaO_tostring(L, o), 1)))
 
 #define isemptystr(o)	(ttisshrstring(o) && tsvalue(o)->shrlen == 0)
 
@@ -633,25 +633,25 @@ LUALIB_API const char* (luaL_tolstring)(lua_State* L, int idx, size_t* len);
 // luaB_tostring 复制过来了
 static int my_tostring_func(lua_State* L) {
   lua_assert(lua_type(L, 1) != LUA_TNONE);
-	//luaL_checkany(L, 1);
+  //luaL_checkany(L, 1);
   luaL_tolstring(L, 1, NULL);
   return 1;
 }
 
 // add@om
-// 下面的实现模式抄自 luaT_callTMres,【不支持协程打断】
+// 主要就是调用 luaL_tolstring
 // PS1: 有些想通过全局表去获取`tostring`，思索了下，放弃了。
-// PS2: __tostring 也没定义在元表里？？ 还想参考下 luaL_tolstring 的呢。
+// PS2: __tostring 不是标准的元表项?!!! 【目前的实现不能yield】
+// PS3: luaO_tostring 和 luaL_tolstring 的结果不统一，服气
 static void call_my_tostring(lua_State* L, StkId res) {
-    StkId top = L->top;
-	ptrdiff_t result = savestack(L, res);
-	setfvalue(s2v(top), my_tostring_func);
-	setobjs2s(L, top + 1, res);
-	L->top += 2;
-    // luaV_finishOp 里对 OP_CONCAT 的处理写死了返回的地址。不能支持 luaD_call
-	luaD_callnoyield(L, top, 1);
-	res = restorestack(L, result);
-	setobjs2s(L, res, --L->top);  /* move result to its place */
+  StkId top = L->top;
+  ptrdiff_t res_offset = savestack(L, res);
+  // setivalue(s2v(top), res_offset);// yield 返回 luaV_finishOp 里 要用到
+  // L->top ++;
+  luaL_tolstring(L, (int)(res - L->top), NULL);// push tostring(res)
+  res = restorestack(L, res_offset);
+  setobjs2s(L, res, --L->top);  /* pop result to its place  */
+  // L->top --; // pop res_offset
 }
 
 /* replace@om
@@ -659,34 +659,35 @@ static void call_my_tostring(lua_State* L, StkId res) {
 ** 使用近似tostring的实现来格式化，具体看 luaL_tolstring 。
 */
 void luaV_concat(lua_State* L, int total) {
-    lua_assert(total > 0);
-    StkId base = L->top - total;
-    // convert to string
-    for (int i = 0; i < total; i++) {
-        StkId res = base + i;
-        if (!tostring(L, s2v(res))) {
-            call_my_tostring(L, res);
-        }
-    }
-    // concat string
-    size_t len = vslen(s2v(base));
-	for (int i = 1; i < total; i++) {
+  lua_assert(total > 0);
+  if (total == 1) return;/* "all" values already concatenated */
+  StkId base = L->top - total;
+  // convert to string
+  for (int i = 0; i < total; i++) {
+      StkId res = base + i;
+      if (!tostring(L, s2v(res))) {
+          call_my_tostring(L, res);
+      }
+  }
+  // concat string
+  size_t len = vslen(s2v(base));
+  for (int i = 1; i < total; i++) {
         len += vslen(s2v(base + i));
-		if (l_unlikely(len >= (MAX_SIZE / sizeof(char))))
-			luaG_runerror(L, "string length overflow");
-	}
-    TString* ts;
-	if (len <= LUAI_MAXSHORTLEN) {  /* is result a short string? */
-		char buff[LUAI_MAXSHORTLEN];
-		copy2buff(L->top, total, buff);  /* copy strings to buffer */
-		ts = luaS_newlstr(L, buff, len);
-	}
-	else {  /* long string; copy strings directly to final result */
-		ts = luaS_createlngstrobj(L, len);
-		copy2buff(L->top, total, getstr(ts));
-	}
-	setsvalue2s(L, base, ts);  /* create result */
-    L->top -= total - 1;/* popped 'total' strings and pushed one */
+    if (l_unlikely(len >= (MAX_SIZE / sizeof(char))))
+      luaG_runerror(L, "string length overflow");
+  }
+  TString* ts;
+  if (len <= LUAI_MAXSHORTLEN) {  /* is result a short string? */
+    char buff[LUAI_MAXSHORTLEN];
+    copy2buff(L->top, total, buff);  /* copy strings to buffer */
+    ts = luaS_newlstr(L, buff, len);
+  }
+  else {  /* long string; copy strings directly to final result */
+    ts = luaS_createlngstrobj(L, len);
+    copy2buff(L->top, total, getstr(ts));
+  }
+  setsvalue2s(L, base, ts);  /* create result */
+  L->top -= total - 1;/* popped 'total' strings and pushed one */
 }
 
 /*
@@ -962,13 +963,15 @@ void luaV_finishOp (lua_State *L) {
       break;
     }
     case OP_CONCAT: {
-      StkId top = L->top - 1;  /* top when 'luaT_tryconcatTM' was called */
+      // mod@om 整个被修改了
+      luaG_runerror(L, "mylua __tostring is yield?");
+      StkId top = L->top - 1;  /* top when 'call_my_tostring => luaL_tolstring' was called */
+      ptrdiff_t res_offset = ivalue(s2v(top-1));
+      StkId res_pos = restorestack(L, res_offset);
+      setobjs2s(L, res_pos, top);  /* put call_my_tostring result*/
       int a = GETARG_A(inst);      /* first element to concatenate */
       int total = cast_int(top - 1 - (base + a));  /* yet to concatenate */
-      // 写死了返回值偏移，不支持 call_my_tostring 了。
-      // todo@om inst的 C 没有使用，可以保存下返回的reg偏移。
-      setobjs2s(L, top - 2, top);  /* put TM result in proper position */
-      L->top = top - 1;  /* top is one after last element (at top-2) */
+      L->top = top - 1;
       luaV_concat(L, total);  /* concat them (may yield again) */
       break;
     }
@@ -1189,7 +1192,7 @@ void luaV_finishOp (lua_State *L) {
 
 
 #define updatestack(ci)  \
-	{ if (l_unlikely(trap)) { updatebase(ci); ra = RA(i); } }
+  { if (l_unlikely(trap)) { updatebase(ci); ra = RA(i); } }
 
 
 /*
@@ -1240,7 +1243,7 @@ void luaV_finishOp (lua_State *L) {
 
 /* 'c' is the limit of live values in the stack */
 #define checkGC(L,c)  \
-	{ luaC_condGC(L, (savepc(L), L->top = (c)), \
+  { luaC_condGC(L, (savepc(L), L->top = (c)), \
                          updatetrap(ci)); \
            luai_threadyield(L); }
 

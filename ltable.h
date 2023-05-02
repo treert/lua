@@ -41,7 +41,7 @@ LUAI_FUNC void luaH_free (lua_State *L, Table *t);
 
 LUAI_FUNC int luaH_next (lua_State *L, Table *t, StkId key);
 // 迭代器。itor_idx start from 0, 返回的下一个 itor_idx，如果 < 0, 迭代结束，没有结果。结果保存到 key:ret_idx,value:ret_idx+1
-LUAI_FUNC int luaH_itor_next (lua_State *L, Table *t, int32_t itor_idx, StkId ret_idx);
+LUAI_FUNC int32_t luaH_itor_next (lua_State *L, Table *t, int32_t itor_idx, StkId ret_idx);
 
 LUAI_FUNC lua_Unsigned luaH_getn (Table *t);
 

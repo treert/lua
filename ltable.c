@@ -271,8 +271,8 @@ int luaH_next (lua_State *L, Table *t, StkId key) {
   if (!ttisnil(s2v(key))){
     node = getgeneric_node(t, s2v(key));
     if (l_unlikely(node == NULL)){
-      luaG_runerror(L, "invalid key to 'next'");  /* key not found */
-      return 0;// lua 是会报错的。【todo@om 可以直接注释掉上面的抛错，这样next就不会报错了。只是这样和lua不兼容了 】
+      luaG_runerror(L, "invalid key to 'next'");  /* key not found */ // 兼容 lua
+      return 0;
     }
     node ++;
   }
@@ -290,7 +290,7 @@ int luaH_next (lua_State *L, Table *t, StkId key) {
   return 0;  /* no more elements */
 }
 
-int luaH_itor_next (lua_State *L, Table *t, int32_t itor_idx, StkId ret_idx) {
+int32_t luaH_itor_next (lua_State *L, Table *t, int32_t itor_idx, StkId ret_idx) {
   lua_assert(itor_idx >= 0);
   if(table_isarray(t)){
     // for array

@@ -356,6 +356,7 @@ static void checkvalref (global_State *g, GCObject *f, const TValue *t) {
 }
 
 
+// todo@om tests.c
 static void checktable (global_State *g, Table *h) {
   // unsigned int i;
   // unsigned int asize = table_count(h);
@@ -468,7 +469,6 @@ static void checkrefs (global_State *g, GCObject *o) {
       checkvalref(g, o, gco2upv(o)->v);
       break;
     }
-    // todo@om tests.c
     case LUA_VTABLE: case LUA_VArray: {
       checktable(g, gco2t(o));
       break;

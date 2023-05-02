@@ -56,6 +56,7 @@ const char lua_ident[] =
 /*
 ** Convert an acceptable index to a pointer to its respective value.
 ** Non-valid indices return the special nil value 'G(L)->nilvalue'.
+** doc@om 0 是 invalid index
 */
 static TValue *index2value (lua_State *L, int idx) {
   CallInfo *ci = L->ci;
@@ -86,7 +87,9 @@ static TValue *index2value (lua_State *L, int idx) {
   }
 }
 
-
+TValue *luaA_index2value (lua_State *L, int idx) {
+    return index2value(L, idx);
+}
 
 /*
 ** Convert a valid actual index (not a pseudo-index) to its address.
@@ -1266,7 +1269,6 @@ LUA_API int lua_error (lua_State *L) {
   return 0;  /* to avoid warnings */
 }
 
-// todo@om next 留下在只是为了兼容
 LUA_API int lua_next (lua_State *L, int idx) {
   Table *t;
   int more;

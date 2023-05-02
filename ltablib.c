@@ -19,6 +19,9 @@
 #include "lauxlib.h"
 #include "lualib.h"
 
+// 方便
+#include "lapi.h"
+#include "ltable.h"
 
 /*
 ** Operations that an object must define to mimic a table
@@ -413,6 +416,46 @@ static int sort (lua_State *L) {
 
 /* }====================================================== */
 
+static int newmap (lua_State *L) {
+  int n = (int)luaL_optinteger(L, 1, 0);
+  lua_createtable(L, 0, n);
+  return 1;  /* return table */
+}
+
+static int newarray(lua_State *L) {
+  int n = (int)luaL_optinteger(L, 1, 0);
+  lua_createarray(L, n);
+  return 1;  /* return table */
+}
+
+static int get_capacity(lua_State *L) {
+  luaL_checktype(L, 1, LUA_TTABLE);
+  const TValue *o = luaA_index2value(L, 1);
+  Table* t = hvalue(o);
+  lua_pushinteger(L, t->data ? sizenode(t) : 0);
+  return 1;  /* return table */
+}
+
+// push next_idx,key,value or nothing
+static int tablib_next(lua_State *L) {
+  lua_lock(L);
+  luaL_checktype(L, 1, LUA_TTABLE);
+  int32_t n = (int32_t)luaL_optinteger(L, 2, 0);
+  if(n < 0) {
+    lua_unlock(L);
+    return 0;
+  }
+  const TValue *o = luaA_index2value(L, 1);
+  Table* t = hvalue(o);
+  int next_idx = luaH_itor_next(L, t, n, L->top + 1);
+  if (next_idx > 0) {
+    setivalue(s2v(L->top), next_idx);
+    api_incr_top_n(L, 3);
+    return 3;
+  }
+  lua_unlock(L);
+  return 0;
+}
 
 static const luaL_Reg tab_funcs[] = {
   {"concat", tconcat},
@@ -422,6 +465,10 @@ static const luaL_Reg tab_funcs[] = {
   {"remove", tremove},
   {"move", tmove},
   {"sort", sort},
+  {"newmap", newmap},
+  {"newarray", newarray},
+  {"get_capacity", get_capacity},
+  {"next", tablib_next},
   {NULL, NULL}
 };
 
