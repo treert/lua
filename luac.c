@@ -423,6 +423,10 @@ static void PrintCode(const Proto* f)
 	printf("%d %d %d%s",a,b,c,ISK);
 	if (isk) { printf(COMMENT); PrintConstant(f,c); }
 	break;
+   case OP_SETTAIL:// add@om
+	printf("%d %d%s",a,c,ISK);
+	if (isk) { printf(COMMENT); PrintConstant(f,c); }
+	break;
    case OP_SETFIELD:
 	printf("%d %d %d%s",a,b,c,ISK);
 	printf(COMMENT); PrintConstant(f,b);

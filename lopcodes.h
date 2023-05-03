@@ -218,6 +218,7 @@ OP_GETFIELD,/*	A B C	R[A] := R[B][K[C]:string]			*/
 OP_SETTABUP,/*	A B C	UpValue[A][K[B]:string] := RK(C)		*/
 OP_SETTABLE,/*	A B C	R[A][R[B]] := RK(C)				*/
 OP_SETI,/*	A B C	R[A][B] := RK(C)				*/
+OP_SETTAIL,/*	A B C	R[A][#R[A]] := RK(C)	 */ // only support table and dont care about __len 元表 add@om
 OP_SETFIELD,/*	A B C	R[A][K[B]:string] := RK(C)			*/
 
 OP_NEWTABLE,/*	A B C k	R[A] := {}					*/

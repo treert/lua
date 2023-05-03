@@ -117,7 +117,7 @@ assert(idx == 1 and k == 3 and v == -33) -- 有错误保持不变
 
 -- 测试下gc 【应该UBOX分配的内存数量时自己管理的没通知lua，lua根本不知道】
 print("start test stable_sort memory cost")
-local size = 2^10
+local size = 2^5
 local onek = 2^10
 collectgarbage()
 local mm1 = collectgarbage("count")
@@ -161,5 +161,12 @@ local mm3 = collectgarbage("count")
 print("shrink table mm point", mm1, mm2, mm3)
 assert(mm2 - mm1 > size and mm2 - mm3 > size)
 
+print("test t[] = 1")
+local a = {}
+a[] = 1
+a[] = 2
+assert(a[1] == 1 and a[2] == 2)
+local func,msg = load("print(a[])") -- 这个是语义级别的错误。用pcall是不行的。编译就报错了
+assert(func == nil and string.find(msg, "t[]",1,1))
 
 print "end test array"

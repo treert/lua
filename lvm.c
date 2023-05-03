@@ -1065,7 +1065,7 @@ void luaV_finishOp (lua_State *L) {
       /* only these other opcodes can yield */
       lua_assert(op == OP_TFORCALL || op == OP_CALL ||
            op == OP_TAILCALL || op == OP_SETTABUP || op == OP_SETTABLE ||
-           op == OP_SETI || op == OP_SETFIELD);
+           op == OP_SETI || op == OP_SETTAIL || op == OP_SETFIELD);
       break;
     }
   }
@@ -1521,6 +1521,31 @@ void luaV_execute (lua_State *L, CallInfo *ci) {
           TValue key;
           setivalue(&key, c);
           Protect(luaV_finishset(L, s2v(ra), &key, rc, slot));
+        }
+        vmbreak;
+      }
+      vmcase(OP_SETTAIL) {
+        TValue* t;
+        if(GETARG_B(i)) {
+          t = cl->upvals[GETARG_A(i)]->v;
+        }
+        else {
+          t = s2v(ra);
+        }
+        if l_unlikely(!ttistable(t)){
+          savestate(L,ci);// will throw error
+          luaG_runerror(L, "t[] = x only support table");
+        }
+        const TValue *slot;
+        int c = table_count(hvalue(t)) + 1;
+        TValue *rc = RKC(i);
+        if (luaV_fastgeti(L, t, c, slot)) {
+          luaV_finishfastset(L, t, slot, rc);
+        }
+        else {
+          TValue key;
+          setivalue(&key, c);
+          Protect(luaV_finishset(L, t, &key, rc, slot));
         }
         vmbreak;
       }

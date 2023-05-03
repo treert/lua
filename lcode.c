@@ -796,6 +796,10 @@ void luaK_dischargevars (FuncState *fs, expdesc *e) {
       e->k = VRELOC;
       break;
     }
+    case VINDEXTAIL: {
+      luaX_syntaxerror(fs->ls, "only support write to t[]");
+      break;
+    }
     case VINDEXSTR: {
       freereg(fs, e->u.ind.t);
       e->u.info = luaK_codeABC(fs, OP_GETFIELD, 0, e->u.ind.t, e->u.ind.idx);
@@ -1065,6 +1069,10 @@ void luaK_storevar (FuncState *fs, expdesc *var, expdesc *ex) {
       codeABRK(fs, OP_SETI, var->u.ind.t, var->u.ind.idx, ex);
       break;
     }
+    case VINDEXTAIL: {
+      codeABRK(fs, OP_SETTAIL, var->u.ind.t, var->u.ind.idx, ex);
+      break;
+    }
     case VINDEXSTR: {
       codeABRK(fs, OP_SETFIELD, var->u.ind.t, var->u.ind.idx, ex);
       break;
@@ -1276,10 +1284,17 @@ static int isSCnumber (expdesc *e, int *pi, int *isfloat) {
 ** values in registers.
 */
 void luaK_indexed (FuncState *fs, expdesc *t, expdesc *k) {
-  if (k->k == VKSTR)
-    str2K(fs, k);
   lua_assert(!hasjumps(t) &&
              (t->k == VLOCAL || t->k == VNONRELOC || t->k == VUPVAL));
+  if (k == NULL){
+    // t[]=x 的语法糖用到这个 add@om
+    t->u.ind.t = (t->k == VLOCAL) ? t->u.var.ridx: t->u.info;
+    t->u.ind.idx = t->k == VUPVAL;// upval vs local
+    t->k = VINDEXTAIL;
+    return;
+  }
+  if (k->k == VKSTR)
+    str2K(fs, k);
   if (t->k == VUPVAL && !isKstr(fs, k))  /* upvalue indexed by non 'Kstr'? */
     luaK_exp2anyreg(fs, t);  /* put it in a register */
   if (t->k == VUPVAL) {

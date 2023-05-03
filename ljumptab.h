@@ -43,6 +43,7 @@ static const void *const disptab[NUM_OPCODES] = {
 &&L_OP_SETTABUP,
 &&L_OP_SETTABLE,
 &&L_OP_SETI,
+&&L_OP_SETTAIL,
 &&L_OP_SETFIELD,
 &&L_OP_NEWTABLE,
 &&L_OP_SELF,

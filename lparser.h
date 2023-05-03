@@ -46,6 +46,9 @@ typedef enum {
   VINDEXUP,  /* indexed upvalue;
                 ind.t = table upvalue;
                 ind.idx = key's K index */
+  VINDEXTAIL, /* 支持 t[] = xx, 和 VINDEXI 类似。在 table 后面追加元素 add@om
+                ind.t = table register;
+                ind.idx = isupvalue */
   VINDEXI, /* indexed variable with constant integer;
                 ind.t = table register;
                 ind.idx = key's value */

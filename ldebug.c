@@ -608,7 +608,7 @@ static const char *funcnamefromcode (lua_State *L, const Proto *p,
     case OP_GETI: case OP_GETFIELD:
       tm = TM_INDEX;
       break;
-    case OP_SETTABUP: case OP_SETTABLE: case OP_SETI: case OP_SETFIELD:
+    case OP_SETTABUP: case OP_SETTABLE: case OP_SETI: case OP_SETTAIL: case OP_SETFIELD:
       tm = TM_NEWINDEX;
       break;
     case OP_MMBIN: case OP_MMBINI: case OP_MMBINK: {

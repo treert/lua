@@ -1342,6 +1342,14 @@ static void suffixedexp (LexState *ls, expdesc *v) {
         break;
       }
       case '[': {  /* '[' exp ']' */
+        // '[]'【 for t[]=x】
+        if (luaX_lookahead(ls) == ']') {
+          luaK_exp2anyregup(fs, v);
+          luaK_indexed(fs, v, NULL);
+          luaX_next(ls);
+          luaX_next(ls);
+          break;
+        }
         expdesc key;
         luaK_exp2anyregup(fs, v);
         yindex(ls, &key);
