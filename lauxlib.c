@@ -497,16 +497,21 @@ static const luaL_Reg boxmt[] = {  /* box metamethods */
   {NULL, NULL}
 };
 
+static const char* newbox_tname = "_UBOX*";
 
 static void newbox (lua_State *L) {
   UBox *box = (UBox *)lua_newuserdatauv(L, sizeof(UBox), 0);
   box->box = NULL;
   box->bsize = 0;
-  if (luaL_newmetatable(L, "_UBOX*"))  /* creating metatable? */
+  if (luaL_newmetatable(L, newbox_tname))  /* creating metatable? */
     luaL_setfuncs(L, boxmt, 0);  /* set its metamethods */
   lua_setmetatable(L, -2);
 }
 
+static UBox* check_box(lua_State *L, int boxidx) {
+  UBox *box = luaL_checkudata(L, boxidx, newbox_tname);
+  return box;
+}
 
 /*
 ** check whether buffer is using a userdata on the stack as a temporary
@@ -566,6 +571,24 @@ static char *prepbuffsize (luaL_Buffer *B, size_t sz, int boxidx) {
     B->size = newsize;
     return newbuff + B->n;
   }
+}
+
+LUALIB_API void *(luaL_newbigbuffer) (lua_State *L, size_t sz) {
+  if (l_unlikely(sz <= 0)){
+    return NULL;
+  }
+  newbox(L);  /* create a new box */
+  lua_toclose(L, -1);
+  void *newbuff = resizebox(L, -1, sz);
+  return newbuff;
+}
+LUALIB_API void *(luaL_addbigbuffer) (lua_State *L, size_t sz, int boxidx) {
+  UBox* box = check_box(L, boxidx);
+  if (l_unlikely(sz <= 0)){
+    return NULL;
+  }
+  void *newbuff = resizebox(L, boxidx, box->bsize + sz);
+  return newbuff;
 }
 
 /*

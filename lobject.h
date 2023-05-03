@@ -759,8 +759,8 @@ typedef struct Table {
   lu_byte lsizenode;  /* log2 of size of capacity */
 
   int32_t count;// table_count = count - freecount
-  int32_t freecount;// map: 空洞的数量. array:0,不记录空洞数量，麻烦
-  int32_t freelist;// map 下的空洞链表头。特殊值：(-1: 被锁定，不能读写，用于排序)
+  int32_t freecount;// map: 空洞的数量. array:0,不记录空洞数量，麻烦。
+  int32_t freelist;// map 下的空洞链表头。freecount > 0 时有用。
 
   void *data;// TValue* for array, Node*+int32_t* for map
 

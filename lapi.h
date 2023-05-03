@@ -51,9 +51,16 @@
 #define decodeNresults(n)	(-(n) - 3)
 
 /* doc@om
+由于GC和异常机制的问题。api类的函数需要确保不遇到问题。
+如果能确保函数执行的代码全部是c的，其实可以访问内部结构的。
+如果函数虽然是c的，但是又直接或间接调用到 error 类的函数，需要确保 new出的对象放到栈上了。
+这个可以参考 luaL_Buffer 的使用。理论上来说，应该都用这个结构的。
+-------------------------------------------------
 lua 没有暴露 TValue 之类的给 外部，甚至都不暴露给内置的库。
 比如 tablib.c 的实现完全没有用到内部结构信息。非常低效呀。内部库不应该可以访问内部结构吗？
 */
 LUAI_FUNC TValue* luaA_index2value(lua_State *L, int idx);
+
+LUAI_FUNC void luaA_pushvalue(lua_State *L, TValue* v);
 
 #endif

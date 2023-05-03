@@ -130,6 +130,11 @@ typedef enum {
   }\
 }
 
+// 麻了。浮点和整数混用的头大之处
+LUAI_FUNC int luaV_cmpnumber (const TValue *l, const TValue *r);
+// 不会去调用元表之类。
+LUAI_FUNC int luaV_cmpobj_safe (const TValue *l, const TValue *r);
+
 LUAI_FUNC int luaV_equalobj (lua_State *L, const TValue *t1, const TValue *t2);
 LUAI_FUNC int luaV_lessthan (lua_State *L, const TValue *l, const TValue *r);
 LUAI_FUNC int luaV_lessequal (lua_State *L, const TValue *l, const TValue *r);

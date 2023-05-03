@@ -52,7 +52,6 @@ const char lua_ident[] =
 /* test for upvalue */
 #define isupvalue(i)		((i) < LUA_REGISTRYINDEX)
 
-
 /*
 ** Convert an acceptable index to a pointer to its respective value.
 ** Non-valid indices return the special nil value 'G(L)->nilvalue'.
@@ -89,6 +88,13 @@ static TValue *index2value (lua_State *L, int idx) {
 
 TValue *luaA_index2value (lua_State *L, int idx) {
     return index2value(L, idx);
+}
+
+void luaA_pushvalue(lua_State *L, TValue* v){
+  lua_lock(L);
+  setobj2s(L, L->top, v);
+  api_incr_top(L);
+  lua_unlock(L);
 }
 
 /*
@@ -330,6 +336,15 @@ LUA_API int lua_isstring (lua_State *L, int idx) {
 LUA_API int lua_isuserdata (lua_State *L, int idx) {
   const TValue *o = index2value(L, idx);
   return (ttisfulluserdata(o) || ttislightuserdata(o));
+}
+
+LUA_API int (lua_ismap) (lua_State *L, int idx) {
+  const TValue *o = index2value(L, idx);
+  return ttismap(o);
+}
+LUA_API int (lua_isarray) (lua_State *L, int idx) {
+  const TValue *o = index2value(L, idx);
+  return ttisarray(o);
 }
 
 

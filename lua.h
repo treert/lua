@@ -186,6 +186,8 @@ LUA_API int             (lua_isstring) (lua_State *L, int idx);
 LUA_API int             (lua_iscfunction) (lua_State *L, int idx);
 LUA_API int             (lua_isinteger) (lua_State *L, int idx);
 LUA_API int             (lua_isuserdata) (lua_State *L, int idx);
+LUA_API int             (lua_ismap) (lua_State *L, int idx);
+LUA_API int             (lua_isarray) (lua_State *L, int idx);
 LUA_API int             (lua_type) (lua_State *L, int idx);
 LUA_API const char     *(lua_typename) (lua_State *L, int tp);
 
@@ -399,6 +401,15 @@ LUA_API void (lua_closeslot) (lua_State *L, int idx);
 
 /* }============================================================== */
 
+/*
+** {==============================================================
+** add@om
+** ===============================================================
+*/
+
+#define lua_abs(i)    ((i)<0?-i:i)
+
+/* }============================================================== */
 
 /*
 ** {==============================================================

@@ -81,4 +81,85 @@ assert(t[1] == 11)
 assert(t[0] == nil)
 assert(t.m == 'mm')
 
+
+print("test stable_sort")
+local a = [1,nil,3,2]
+table.stable_sort(a)
+assert(a[2] == 2 and a[4] == nil and #a == 4)
+table.shrink(a)
+assert(a[2] == 2 and #a == 3)
+
+local a = {a1=1,a22=2,a333=333, 11,22,-33}
+table.stable_sort(a)
+local idx,k,v = table.next(a)
+assert(idx == 1 and k == 3 and v == -33)
+
+table.stable_sort(a, function (k,v)
+    return -v
+end, 3)
+local idx,k,v = table.next(a)
+assert(idx == 1 and k == 'a333' and v == 333)
+
+table.stable_sort(a, function (k,v)
+    return -v
+end, -3)
+local idx,k,v = table.next(a)
+assert(idx == 1 and k == 3 and v == -33)
+
+pcall(function ()
+    table.stable_sort(a, function (k,v)
+        error("hahaha")
+        return -v
+    end, 3)
+end)
+local idx,k,v = table.next(a)
+assert(idx == 1 and k == 3 and v == -33) -- 有错误保持不变
+
+-- 测试下gc 【应该UBOX分配的内存数量时自己管理的没通知lua，lua根本不知道】
+print("start test stable_sort memory cost")
+local size = 2^10
+local onek = 2^10
+collectgarbage()
+local mm1 = collectgarbage("count")
+local a = []
+a[size*onek] = 1
+local mm2 = collectgarbage("count")
+local mmt1,mmt2
+do 
+    table.stable_sort(a) -- 会临时增加内存。但是感知不到
+    mmt1 = collectgarbage("count") 
+    assert(mmt1 - mm2 < size)
+end
+do
+    local ok,msg = pcall(function ()
+        table.stable_sort(a, function ()
+            mmt1 = collectgarbage("count")
+            print("stable_sort mm", mm1, mm2, mmt1) -- 这儿也感知不到
+            error("okmsg")
+        end)
+    end)
+    print(msg)
+    assert(string.find(msg, 'okmsg'))
+    mmt1 = collectgarbage("count") -- 也感知不到临时内存
+    assert(mmt1 - mm2 < size)
+end
+local mmt2 = collectgarbage("count")
+print("mmt point", mm1, mm2, mmt1, mmt2)
+a = nil
+collectgarbage()
+local mm3 = collectgarbage("count")
+print("mm point", mm1, mm2, mm3)
+assert(mm2 - mm1 > size and mm2 - mm3 > size)
+
+local mm1 = collectgarbage("count")
+local a = []
+a[size*onek] = 1
+table.stable_sort(a)
+local mm2 = collectgarbage("count")
+table.shrink(a)
+local mm3 = collectgarbage("count")
+print("shrink table mm point", mm1, mm2, mm3)
+assert(mm2 - mm1 > size and mm2 - mm3 > size)
+
+
 print "end test array"

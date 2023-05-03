@@ -554,6 +554,79 @@ int luaV_lessequal (lua_State *L, const TValue *l, const TValue *r) {
   else return lessequalothers(L, l, r);
 }
 
+// 因为nan的存在。情况更加复杂了。
+int luaV_cmpnumber (const TValue *l, const TValue *r) {
+  lua_assert(ttisnumber(l) && ttisnumber(r));
+  // nan == nan and nan < number
+  if(ttisfloat(l) && luai_numisnan(fltvalue(l))){
+    return (ttisfloat(r) && luai_numisnan(fltvalue(r))) ? 0 : -1;
+  }
+  else if((ttisfloat(r) && luai_numisnan(fltvalue(r)))){
+    return 1;
+  }
+  return (nvalue(l) > nvalue(r)) - (nvalue(l) < nvalue(r));
+
+  // 下面的代码也保留吧。头大
+  // if (ttisinteger(l)) {
+  //   if (ttisinteger(r)) {
+  //     lua_Integer a = ivalue(l);
+  //     lua_Integer b = ivalue(r);
+  //     // https://stackoverflow.com/questions/14579920/fast-sign-of-integer-in-c
+  //     return (a > b) - (a < b);
+  //   }
+  //   else {
+  //     lua_Number b = fltvalue(r);
+  //     if (luai_numisnan(b)){
+  //       return 1;
+  //     }
+  //     lua_Integer a = ivalue(l);
+  //     return (a > b) - (a < b);
+  //   }
+  // }
+  // else {
+  //   lua_Number a = fltvalue(l);
+  //   if (ttisinteger(r)) {
+  //     if (luai_numisnan(a)){
+  //       return -1;
+  //     }
+  //     lua_Integer b = ivalue(r);
+  //     return (a > b) - (a < b);
+  //   }
+  //   else {
+  //     lua_Number b = fltvalue(r);
+  //     if (luai_numisnan(a)){
+  //       return luai_numisnan(b) ? 0 : -1;
+  //     }
+  //     else if(luai_numisnan(b)){
+  //       return 1;
+  //     }
+  //     return (a > b) - (a < b);
+  //   }
+  // }
+}
+
+// 自定义的比较函数。不去调用元表之类的。不过也是很头大。
+int luaV_cmpobj_safe (const TValue *l, const TValue *r) {
+  int t1 = ttype(l),t2 = ttype(r);
+  if(t1 != t2){
+     // trick 这样默认情况下会这样排序： number,string,other,nil
+    t1 += (t1 < LUA_TNUMBER)*100 + (t1 == LUA_TNIL)*10000;
+    t2 += (t2 < LUA_TNUMBER)*100 + (t2 == LUA_TNIL)*10000;
+    return t1 - t2;
+  }
+  if(t1 == LUA_TNUMBER){
+    return luaV_cmpnumber(l, r);
+  }
+  if(t1 == LUA_TSTRING){
+    return l_strcmp(tsvalue(l), tsvalue(r));
+  }
+  if(t1 == LUA_TBOOLEAN){
+    int tt1 = ttypetag(l),tt2 = ttypetag(r);
+    return tt1 - tt2;
+  }
+  // 其他的都当成相等的好了.
+  return 0;
+}
 
 /*
 ** Main operation for equality of Lua values; return 't1 == t2'.

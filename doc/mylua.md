@@ -68,3 +68,9 @@ f(a=1,*{b=2},*{c=3})
 ```
 希望像python一样支持`*args`，想到的实现是构建一个`table`，把命名参数放进去。
 然后发觉这种实现需要频繁的 new table ，觉得不好，先不支持。
+
+## array 
+- 增加 array， 作为 table 变种存在。例子：`[1,2,3]`
+  - 语法 `array := '[' exp { seq exp} [seq] ']'`
+  - array 不支持 weakmode.
+  - `#array` => 曾经写过的最大索引。

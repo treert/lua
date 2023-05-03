@@ -1,32 +1,79 @@
 [my lua](./doc/mylua.md)
 --------
-## todo
-- [ ] 优化 table.sort, 添加 table.keysort array.sort。【想利用内部结构优化】
+## my lua 的主要修改
+- 修改了 table 的实现。现在 **table = map | array**。map is default，是个支持排序的 HashTable。
+- 增加了一些语法。[增量语法糖](#增量语法糖)
+- 增加了一些 api。[table-newapi](#mylua-table-api)
+- 增加稳定排序 [stable sort](#talbestable_sort)
+- 一些不兼容的修改。[不兼容修改](#不兼容修改)
+- for in 遍历修改了。[for in](#for-in)
 
-## 增量修改，兼容性很高
+### 关于 lua
+实现了 map + array + stable_sort 后。
+重新看lua，lua的table如果正确使用，性能也是极好的。【当然 for in pairs 的实现需要优化下, 总不能比ipairs 还慢呀】
+**因为 map 多一层索引的问题。mylua的性能比不了lua了。**
+不过想到因此带来的收益，还行，也没差太多。空表内存还能小一个8字节指针呢。
+
+感觉 lua 不会修改当前 hash 部分的实现了。虽然**遍历无序且不支持排序**，但是性能好呀。
+也许哪天不在乎内存，可以在 hash 节点里增加双向遍历索引，像 php 一样。
+lua 的`#`是个问题。也许哪天分离出`array_count`和`hash_count`出来。权衡一下还是可行的。
+
+## 增量语法糖
+增加了一些语法糖，兼容性很高
+- 增加了一批 `$string $function` 的语法糖。
+  - 如：`$"$a ${1+3}" == "nil 4"`
+  - 如：`local a = ${print('hello')}`
 - 增加了 continue 关键字。
-- 增加了一批 `$string $function` 的语法糖
 - 增加 ?? 运算。
-  - 三目运算符 ?: 加失败了，因为 : 在lua里是特殊的符号。
 - keyword 特殊情况下可以当做普通的 name。如：`t.end = 1`
 - 函数参数支持命名参数。如：`f(1,2,3,a1=1,a2=2)`
 - 增加 array， 作为 table 变种存在。例子：`[1,2,3]`
-  - 语法 `array := '[' exp { seq exp} [seq] ']'`
-  - array 不支持 weakmode.
-  - `#array` => 曾经写过的最大索引。
 - 很小的修改
   - 函数调用和函数定义时参数后面可以增加个一个`,`
 
 ## 不兼容修改
 - __concat 废弃了。`$string`的实现复用了`OP_CONCAT`指令，修改了 concat 的实现。
-- 替换掉 table 的实现。现在是纯粹的HashTable了，统一叫做**map**。也增加了**array**数组变种。
-  - `#map` => HashTableCount, 
-  - 当前的实现方案，table分配的内存只增不减。**`array[2^30]=1`这个代码会分配16G内存！！！**
-  - 通过 array + __index __newindex + map, 可以模拟一个 lua 的 table. 不过性能就堪忧了。
-- 一些被修改了的 API
-  - table.pack 返回的时 Array 了
+- table.pack 返回 array , 不再有 `.n` 了。用 `#t` 获取长度。
+- `#`获取长度的指令。`#map`获取hash表元素个数。`#array`获取数组的曾经有效的最大索引。
+- `next` 基本还是兼容的。不过 lua 原先的实现有个副作用效果。
+  - 已经删除的 key, 大概率还能正确的 next. 现在不行了, 会报错.
 
-## 关于table的修改
+## for in
+for in 特殊支持 table 的内部索引。**耗时是原先 pairs 的 20%.**
+lua 的 pairs 也可以用类似思路修改下实现。
+```lua
+for k,v in t do
+    print(k,v)
+end
+
+-- 等价于 pairs(t), 实际修改了 pairs 函数。
+for k,v in pairs(t) do
+    print(k,v)
+end
+```
+
+## talbe.stable_sort
+
+增加稳定排序。not in place sort. 耗时差不多sort的一半。**可以分别对map的key或者value排序**
+```c
+/*
+table.stable_sort( t, opt1?, opt2?)。 参数说明：
+opt1
+- 1   sortbyvalue   ascending order  (default)
+- -1  sortbyvalue   descending order
+- 2   sortbykey     ascending order
+- -2  sortbykey     descending order
+- function     opt2 控制函数如何使用
+  - 1               cmp(value_a,value_b):number ascending order (default)
+  - -1              cmp(value_a,value_b):number descending order
+  - 2               cmp(key_a,key_b):number ascending order
+  - -2              cmp(key_a,key_b):number descending order
+  - 3               getid(k,v):number ascending order 函数返回数字id作为排序依据
+  - 3               getid(k,v):number descending order 函数返回数字id作为排序依据
+*/
+```
+
+## mylua table api
 mylua 把 table 分成了纯粹的 map,array 两个结构。默认是 map。
 提供一些API
 - `table.newarray(int size)` 可以指定初始容量。最简单的构造是`[1,2,3,4,5]`
@@ -34,14 +81,29 @@ mylua 把 table 分成了纯粹的 map,array 两个结构。默认是 map。
 - `table.get_capacity(int size)` 可以容纳的最多的元素个数。可以换算出消耗的内存
 - `table.next(t,idx?)` return next_idx,k,v or nil when nomore element.
   - 快速遍历。idx start from 0, 但是应该不用关注。初始传 nil 就行
+- `table.ismap(t)`
+- `table.isarray(t)`
+- `table.shrink(t)` 压缩 table 的空洞。【会尝试减少内存】
+- `table.stable_sort(t,opt1,opt2)` 稳定排序。
 
+## mylua table 内部实现 
 使用类似 dotnet 的 Dictionary 实现方案。功能上更符合我的需要。
 - 语义更加明确，不会再有 `#t` 的争执。
-- 方便后续优化`table.sort`之类。
+- 方便后续优化`forin sort`之类。
 - **实现附带的效果：添加的顺序和遍历的顺序一致。**
   - 如果有空洞，添加的元素先进空洞，顺序就靠前了。
-  - 默认初始化`{}`如果数组和kv混合，一般是kv在前。但是不保证。
 
+特殊说明:
+- 默认初始化`{}`如果数组和kv混合，一般是kv在前。但是不保证。
+- 当前的实现方案，talbe的内存是固定的若干种。倍增分配。
+- array 额外提供的array就是个简单的数组
+  - 内存分配激进，**`array[2^30]=1`这个代码会分配16G内存！！！**。
+  - getset 的性能高出map一倍，性能和lua的table的数组部分相当。
+    - 【不要因为性能选择 array, 按使用需求选择】
+
+通过 array + metatable + map, 可以模拟一个 lua 的 table. 不过性能就堪忧了。
+## mylua 性能测试
+map 的实现多了一层索引。性能差于lua table。大致 多耗时 30%~50%
 性能上有利有弊。测试 [benchmark.lua](./testes/benchmark.lua) 结果如下：
 | lua5.4 | mylua  | my/lua  |desc (这里的array还是table,不是mylua的array)
 | -----  | -----  | --------|-
@@ -68,6 +130,7 @@ mylua 把 table 分成了纯粹的 map,array 两个结构。默认是 map。
 |1.059   |1.744   |1.65     | array[2000] init
 |0.45    |0.678   |1.51     | array[2000] reset
 |1.521   |0.287   |0.19     | array[2000] forin
+|0.966   |0.473   |0.49     | array[2000] forin
 
 ### 旧的测试数据，包含了 Array 的测试.
 [test-performance](./testes/test-performance.lua) 旧的测试代码. 里面包含的不兼容lua的代码。Array 和 lua 纯粹使用数组差不多。

@@ -315,8 +315,54 @@ int32_t luaH_itor_next (lua_State *L, Table *t, int32_t itor_idx, StkId ret_idx)
   return -1;
 }
 
+static void rehash_map(Table *t){
+  lua_assert(table_ismap(t));
+  lua_State*L = NULL;
+  memset(getbucketstart(t),-1,getmapindexmemsize(t->lsizenode));
+  for (int32_t i = 0; i < table_maxcount(t); i++) {
+    Node *n = gnode(t, i);
+    if(!isempty(gval(n))){
+      TValue key;
+      getnodekey(L, &key, n);
+      uint32_t hash = gethash(&key);
+      int32_t* bucket = getbucketbyhash(t, hash);
+      gnext(n) = *bucket;
+      *bucket = i;
+    }
+  }
+}
+
+// 重新选择数组的内存大小。【指挥减小内存】
+static void resize_table_mem(lua_State *L, Table *t, int need_rehash_map){
+  if (t->data == NULL) return;// 不可能再减少了
+  
+  if (t->count > 0) {
+    int lsize = luaO_ceillog2(t->count);// 肯定有效的
+    if (lsize == t->lsizenode) return;// 没变化
+    lua_assert(lsize < t->lsizenode);
+
+    size_t new_sz = table_isarray(t) ? getarraymemsize(lsize): getmapmemsize(lsize);
+    size_t old_sz = table_isarray(t) ? getarraymemsize(t->lsizenode): getmapmemsize(t->lsizenode);
+    t->data = luaM_realloc(L, t->data, old_sz, new_sz);
+    t->lsizenode = lsize;
+  }
+  else {
+    size_t new_sz = 0;
+    size_t old_sz = table_isarray(t) ? getarraymemsize(t->lsizenode): getmapmemsize(t->lsizenode);
+    t->data = luaM_realloc(L, t->data, old_sz, new_sz);
+    lua_assert(t->data == NULL);
+    t->data = NULL;// 防止出现bug。release 模式下，编译器会优化吧。
+    t->lsizenode = 0;// no need
+  }
+  
+  if (need_rehash_map && table_ismap(t)) {
+    rehash_map(t);
+  }
+}
+
 /*
-  HashTable 只增加，不减小。【也许以后会改吧。先这么着吧。实现中会有很多好处。】
+  增加size，能够继续放入 addsize 个元素。【数组的空洞也占位置的】
+  HashTable 默认只增加，不减小。【 shrink 可以减小内存】
 */
 void luaH_addsize (lua_State *L, Table *t, int32_t addsize){
   if (addsize <= 0) return;
@@ -333,7 +379,7 @@ void luaH_addsize (lua_State *L, Table *t, int32_t addsize){
   if (table_isarray(t)){
     size_t oldsize = t->data == NULL ? 0: getarraymemsize(t->lsizenode);
     size_t newsize = getarraymemsize(lsize);
-    t->data = (Node*)luaM_realloc(L, t->data, oldsize, newsize);
+    t->data = luaM_realloc(L, t->data, oldsize, newsize);
     t->lsizenode = lsize;
     // fill nil
     memset((int8_t*)t->data + oldsize, 0, newsize - oldsize);
@@ -345,19 +391,8 @@ void luaH_addsize (lua_State *L, Table *t, int32_t addsize){
   size_t newsize = getmapmemsize(lsize);
   t->data = luaM_realloc(L, t->data, oldsize, newsize);
   t->lsizenode = lsize;
-  // rebuild bucket idx
-  memset(getbucketstart(t),-1,getmapindexmemsize(t->lsizenode));
-  for (int32_t i = 0; i < maxcount; i++) {
-    Node *n = gnode(t, i);
-    if(!isempty(gval(n))){
-      TValue key;
-      getnodekey(L, &key, n);
-      uint32_t hash = gethash(&key);
-      int32_t* bucket = getbucketbyhash(t, hash);
-      gnext(n) = *bucket;
-      *bucket = i;
-    }
-  }
+  // rebuild bucket idx. not shrink map. 避免遍历的时候修改数组导致遍历出问题
+  rehash_map(t);
 }
 
 void luaH_resize (lua_State *L, Table *t, unsigned int newasize, unsigned int nhsize) {
@@ -365,6 +400,66 @@ void luaH_resize (lua_State *L, Table *t, unsigned int newasize, unsigned int nh
   luaH_addsize(L, t, newasize + nhsize - count);
 }
 
+void luaH_try_shrink (lua_State *L, Table *t, int also_for_array, int resize_mem, int force_rehash) {
+  if(table_maxcount(t) == 0) return;
+  if (table_ismap(t)){
+    int32_t maxcount = table_maxcount(t);
+    int32_t valid_count = 0;
+    for (valid_count = 0; valid_count < maxcount; valid_count++) {
+      Node *n = gnode(t, valid_count);
+      if l_unlikely(isempty(gval(n)))
+        break;
+    }
+    for (int i = valid_count + 1; i < maxcount; i++){
+      Node *n = gnode(t, i);
+      if (!isempty(gval(n))){
+        *gnode(t, valid_count) = *n;
+        valid_count++;
+      }
+    }
+    int need_rehash = force_rehash || (valid_count < maxcount);// count 变化，说明有移动发生
+    t->count = valid_count;
+    t->freecount = 0;
+    t->freelist = 0;// no need
+    if (resize_mem && L) {
+      resize_table_mem(L, t, need_rehash);
+    }
+    else {
+      if (need_rehash) {
+        rehash_map(t);
+      }
+    }
+    return;
+  }
+  // for array
+  if (also_for_array == 1) {
+    int32_t valid_count = 0;
+    for (; valid_count < t->count; valid_count++) {
+      if l_unlikely(isempty(get_array_val(t, valid_count))){
+        break;
+      }
+    }
+    for (int i = valid_count + 1; i < t->count; i++) {
+      TValue *n = get_array_val(t, i);
+      if (!isempty(n)) {
+        *get_array_val(t, valid_count) = *n;
+        valid_count++;//
+      }
+    }
+    if (valid_count < t->count) {
+      memset((TValue*)t->data + valid_count, 0, t->count - valid_count);// 防止野指针之类的。数组扩容很暴力的。
+      t->count = valid_count;
+    }
+  }
+  else if (also_for_array == 2) {
+    while(t->count >= 0 && isempty(get_array_val(t, t->count -1))){
+      t->count--;
+    }
+  }
+  if (resize_mem && L) {
+    resize_table_mem(L, t, 0);
+  }
+}
 
 /*
 ** }=============================================================
@@ -628,16 +723,17 @@ void luaH_newarrayitem (lua_State *L, Table *t, lua_Integer idx, TValue *value) 
   if (idx > MAX_ARRAY_IDX){
     luaG_runerror(L, "array index to big. max support is %d", MAX_ARRAY_IDX);
   }
+  int32_t newcount = (int)idx;
   // grow array
-  if (t->data == NULL || (lua_Unsigned)idx > twoto(t->lsizenode)){
-    luaH_addsize(L, t, (int32_t)idx - t->count);
+  if (t->data == NULL || newcount > twoto(t->lsizenode)){
+    luaH_addsize(L, t, newcount - t->count);
   }
-  t->count = (int32_t)idx;
-  setobj2array(L, get_array_val(t, idx-1), value);
+  t->count = newcount;
+  setobj2array(L, get_array_val(t, newcount-1), value);
 }
 
 /* mark an entry as empty. only luaH_remove can use*/
-#define setempty(v)		settt_(v, LUA_VEMPTY)
+// #define setempty(v)		settt_(v, LUA_VEMPTY)
 
 void luaH_remove (Table *t, Node *node) {
   lua_assert(t->data != NULL);
@@ -667,7 +763,9 @@ void luaH_remove (Table *t, Node *node) {
   else{
     gnext(prenode) = gnext(node);
   }
-  setempty(gval(node));// 这边使用的方法是置空 key
+  // 清理干净。依赖的地方：stable_sort 里的比较函数。
+  setnilvalue(gval(node));// 之气那使用的 setempty. mylua 还是不用的好。
+  setnilkey(node);
   // add to freelist
   t->freecount++;
   gnext(node) = t->freelist;

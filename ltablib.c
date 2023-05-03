@@ -7,6 +7,8 @@
 #define ltablib_c
 #define LUA_LIB
 
+#include <stdlib.h>
+
 #include "lprefix.h"
 
 
@@ -19,9 +21,11 @@
 #include "lauxlib.h"
 #include "lualib.h"
 
-// 方便
+// 方便. 最好不要这么做。
 #include "lapi.h"
 #include "ltable.h"
+#include "lvm.h"
+#include "lgc.h"
 
 /*
 ** Operations that an object must define to mimic a table
@@ -438,11 +442,9 @@ static int get_capacity(lua_State *L) {
 
 // push next_idx,key,value or nothing
 static int tablib_next(lua_State *L) {
-  lua_lock(L);
   luaL_checktype(L, 1, LUA_TTABLE);
   int32_t n = (int32_t)luaL_optinteger(L, 2, 0);
   if(n < 0) {
-    lua_unlock(L);
     return 0;
   }
   const TValue *o = luaA_index2value(L, 1);
@@ -453,8 +455,346 @@ static int tablib_next(lua_State *L) {
     api_incr_top_n(L, 3);
     return 3;
   }
-  lua_unlock(L);
   return 0;
+}
+
+typedef struct FStableSortContext
+{
+  lua_State *L;
+  Table *t;
+  int func_idx;// 比较函数的索引。!=0 时有效。同时也是getid函数的索引。
+  int is_reverse;// 反向排序-1,否则1
+}FStableSortContext;
+
+/*
+ 之所有这么定义，时为了排完序后修改原来的table方便。【缺点：现在排序，差不多要临时获取和原来一样大的内存了】
+*/
+typedef struct FSSortIdxNode
+{
+  TValue id;// getid 函数返回的结果
+  int32_t idx;// 数组索引 或者 map 内部索引。同时用作稳定排序的依据。start from 0
+}FSSortIdxNode;
+
+typedef union FSSortMapNode
+{
+  Node t_data;
+  FSSortIdxNode idata;
+}FSSortMapNode;
+
+typedef union FSSortArrayNode
+{
+  TValue t_data;
+  FSSortIdxNode idata; // 如果时32位，sizeof(FSSortArrayNode) > sizeof(TValue) 会浪费内存
+}FSSortArrayNode;
+
+
+
+// 传入比较函数。不判断nil。要交由用户函数自己处理
+static int stable_sort_cmp_func_call (FStableSortContext *co , TValue *a, TValue *b) {
+  if (co->func_idx != 0) {
+    lua_State *L = co->L;
+    lua_pushvalue(L, co->func_idx);
+    luaA_pushvalue(L, a);
+    luaA_pushvalue(L, b);
+    lua_call(L, 2, 1);
+    int n = (int)luaL_checkinteger(L, -1);
+    return n;
+  }
+  else {
+    return luaV_cmpobj_safe(a, b);
+  }
+}
+
+
+#define stable_sort_check_idx(L,t,idx) {if l_unlikely((idx) >= (t)->count) { \
+    luaL_error(L, "table count shrink when sort, maybe sort recursive in cmp func");\
+    return 0;/* just avoid warning */ \
+  } }
+
+// 完蛋。msvc 不兼容过的样子
+// typedef int (*FStableSortCmpFunc)(const void* a, const void* b, void *c);
+
+#define qsort_cmp_func_define(name) static int name(void *c, const void* a, const void* b) 
+typedef int (*FStableSortCmpFunc)(void *c, const void* a, const void* b);
+
+
+qsort_cmp_func_define(stable_sort_cmp_map_value_up){
+  FSSortMapNode *na = (FSSortMapNode*)a;
+  FSSortMapNode *nb = (FSSortMapNode*)b;
+  int32_t idx_a = na->idata.idx;
+  int32_t idx_b = nb->idata.idx;
+  FStableSortContext *co = (FStableSortContext*)c;
+  lua_assert(table_ismap(co->t));
+  stable_sort_check_idx(co->L, co->t, idx_a);
+  stable_sort_check_idx(co->L, co->t, idx_b);
+  TValue *ka = get_node_val(get_map_node(co->t, idx_a));
+  TValue *kb = get_node_val(get_map_node(co->t, idx_b));
+  int cmp = stable_sort_cmp_func_call(co, ka, kb);
+  if (cmp == 0) cmp = idx_a - idx_b;
+  return cmp * co->is_reverse;
+}
+
+qsort_cmp_func_define(stable_sort_cmp_map_key_up){
+  FSSortMapNode *na = (FSSortMapNode*)a;
+  FSSortMapNode *nb = (FSSortMapNode*)b;
+  int32_t idx_a = na->idata.idx;
+  int32_t idx_b = nb->idata.idx;
+  FStableSortContext *co = (FStableSortContext*)c;
+  lua_assert(table_ismap(co->t));
+  stable_sort_check_idx(co->L, co->t, idx_a);
+  stable_sort_check_idx(co->L, co->t, idx_b);
+  TValue ka,kb;
+  getnodekey(co->L, &ka, get_map_node(co->t, idx_a));
+  getnodekey(co->L, &kb, get_map_node(co->t, idx_b));
+  int cmp = stable_sort_cmp_func_call(co, &ka, &kb);
+  if (cmp == 0) cmp = idx_a - idx_b;
+  return cmp * co->is_reverse;
+}
+
+qsort_cmp_func_define(stable_sort_cmp_array_value_up){
+  FSSortArrayNode *na = (FSSortArrayNode*)a;
+  FSSortArrayNode *nb = (FSSortArrayNode*)b;
+  int32_t idx_a = na->idata.idx;
+  int32_t idx_b = nb->idata.idx;
+  FStableSortContext *co = (FStableSortContext*)c;
+  lua_assert(table_isarray(co->t));
+  stable_sort_check_idx(co->L, co->t, idx_a);
+  stable_sort_check_idx(co->L, co->t, idx_b);
+  TValue *ka = get_array_val(co->t, idx_a);
+  TValue *kb = get_array_val(co->t, idx_b);
+  int cmp = stable_sort_cmp_func_call(co, ka, kb);
+  if (cmp == 0) cmp = idx_a - idx_b;
+  return cmp * co->is_reverse;
+}
+qsort_cmp_func_define(stable_sort_cmp_array_key_up){
+  FSSortArrayNode *na = (FSSortArrayNode*)a;
+  FSSortArrayNode *nb = (FSSortArrayNode*)b;
+  int32_t idx_a = na->idata.idx;
+  int32_t idx_b = nb->idata.idx;
+  FStableSortContext *co = (FStableSortContext*)c;
+  lua_assert(table_isarray(co->t));
+  TValue ka,kb;
+  setivalue(&ka, idx_a+1);
+  setivalue(&kb, idx_b+1);
+  int cmp = stable_sort_cmp_func_call(co, &ka, &kb);
+  if (cmp == 0) cmp = idx_a - idx_b;
+  return cmp * co->is_reverse;
+}
+
+qsort_cmp_func_define(stable_sort_cmp_number_up){
+  FSSortIdxNode* na = (FSSortIdxNode*)a;
+  FSSortIdxNode* nb = (FSSortIdxNode*)b;
+  int cmp = luaV_cmpnumber(&na->id, &nb->id);
+  FStableSortContext *co = (FStableSortContext*)c;
+  if (cmp == 0) cmp = na->idx - nb->idx;
+  return cmp * co->is_reverse;
+}
+
+static const FStableSortCmpFunc stable_sort_cmp_funcs[] = {
+  NULL,
+  // for map
+  stable_sort_cmp_map_value_up,// 1
+  stable_sort_cmp_map_key_up,
+  // for getid
+  stable_sort_cmp_number_up,// 3
+  // for array
+  stable_sort_cmp_array_value_up,// 1+3
+  stable_sort_cmp_array_key_up,
+  NULL
+};
+
+#define ss_idata(b,n,sz)  ((FSSortIdxNode*)((char*)b + n*sz))
+#define sz_map            sizeof(FSSortMapNode)
+#define sz_arr            sizeof(FSSortArrayNode)
+#define sz_idx            sizeof(FSSortIdxNode)
+#define sz_tab(t)         (table_isarray(t) ? sz_arr : sz_map)
+#define sz_buffer(t)      (t->count * sz_tab(t))
+
+static void _stable_sort_work(lua_State *L, void* b, Table *t,
+                    FStableSortContext *co, int cmp_idx) {
+  FStableSortCmpFunc cmp = stable_sort_cmp_funcs[cmp_idx];
+  lua_assert(cmp != NULL && table_maxcount(t) > 1);
+  int count = table_maxcount(t);
+  int one_sz = sz_tab(t);
+  // 填充idx
+  if (cmp_idx == 3) {
+    lua_assert(co->func_idx != 0 && cmp == stable_sort_cmp_number_up);// 额外还要id
+    for (int i = 0; i < count; i++) {
+      lua_pushvalue(L, co->func_idx);
+      if (table_isarray(t)) {
+        lua_pushinteger(L, i+1);
+        luaA_pushvalue(L, get_array_val(t, i));
+      }
+      else {
+        Node* lnode = get_map_node(t, i);
+        TValue kk;
+        getnodekey(L, &kk, lnode);
+        luaA_pushvalue(L, &kk);
+        luaA_pushvalue(L, get_node_val(lnode));
+      }
+      lua_call(L, 2, 1);
+      // 之所有这么写。是因为想同时支持 float 和 int.
+      TValue* id = luaA_index2value(L, -1);
+      luaL_argexpected(L, ttisnumber(id), -1, "getid number");
+      FSSortIdxNode* node = ss_idata(b,i,one_sz);
+      node->id = *id;
+      node->idx = i;
+    }
+    if l_unlikely(count != table_maxcount(t)){
+      luaL_error(L, "getid function should not change table size.");
+    }
+
+    qsort_s(b, count, one_sz, cmp, co);
+    lua_assert(count == table_maxcount(t));
+  }
+  else {
+    for (int i = 0; i < count; i++) {
+      FSSortIdxNode* node = ss_idata(b,i,one_sz);
+      node->idx = i;
+    }
+
+    qsort_s(b, count, one_sz, cmp, co);
+    if l_unlikely(count != table_maxcount(t)){
+      luaL_error(L, "cmp function should not change table size.");// 这个也可以不报错的。
+    }
+  }
+
+  // change table
+  if (table_isarray(t)) {
+    FSSortArrayNode* nodes = (FSSortArrayNode*)b;
+    for (int i = 0; i < count; i++) {
+      nodes[i].t_data = *get_array_val(t, nodes[i].idata.idx);
+    }
+    // memcpy 32位系统上不行
+    if l_likely(sizeof(TValue) == sz_arr) {
+      memcpy(t->data, b, sz_buffer(t));
+    }
+    else {
+      for (int i = 0; i < count; i++) {
+        *get_array_val(t, i) = nodes[i].t_data;
+      }
+    }
+  }
+  else {
+    FSSortMapNode* nodes = (FSSortMapNode*)b;
+    for (int i = 0; i < count; i++) {
+      nodes[i].t_data = *get_map_node(t, nodes[i].idata.idx);
+    }
+    lua_assert(sizeof(Node) == sz_map);
+    memcpy(t->data, b, sz_buffer(t));
+    luaH_try_shrink(L, t, 0, 1, 1);
+  }
+}
+
+/*doc@om
+稳定排序。 table.stable_sort( t, opt1?, opt2?)
+opt1
+- 1   sortbyvalue   ascending order  (default)
+- -1  sortbyvalue   descending order
+- 2   sortbykey     ascending order
+- -2  sortbykey     descending order
+- function     opt2 控制函数如何使用
+  - 1               cmp(value_a,value_b):number ascending order (default)
+  - -1              cmp(value_a,value_b):number descending order
+  - 2               cmp(key_a,key_b):number ascending order
+  - -2              cmp(key_a,key_b):number descending order
+  - 3               getid(k,v):number ascending order 函数返回数字id作为排序依据
+  - 3               getid(k,v):number descending order 函数返回数字id作为排序依据
+
+PS: 开始时打算替换 sort 的. 后发现比想象的难呀。
+  为了不破坏 table 的结构，得复制一份内存，在外部排序，最后一次性修改整个table。
+  既然已经要这样了。那就实现个稳定排序好了。同时通过额外参数。控制各种排序模式。
+  使用 qsort_s 来排序。也许需要定义宏 __STDC_WANT_LIB_EXT1__
+  > https://en.cppreference.com/w/c/algorithm/qsort
+*/
+static int stable_sort(lua_State *L) {
+  luaL_checktype(L, 1, LUA_TTABLE);
+  int num = lua_gettop(L);
+  int func_idx;
+  int opt;
+  if (num == 1){
+    func_idx = 0;
+    opt = 1;
+  }
+  else if (num == 2) {
+    if (lua_isfunction(L, 2)){
+      func_idx = 2;
+      opt = 1;
+    }
+    else {
+      func_idx = 0;
+      opt = (int)luaL_checkinteger(L, 2);
+      if (opt == 0 || opt < -2 || opt > 2){
+        luaL_argerror(L, 2, "opt1 need be one of [1,-1,2,-2]");
+      }
+    }
+  }
+  else {
+    luaL_checktype(L, 2, LUA_TFUNCTION);  /* must be a function */
+    func_idx = 2;
+    opt = (int)luaL_checkinteger(L, 3);
+    if (opt == 0 || opt < -3 || opt > 3){
+      luaL_argerror(L, 3, "opt1 need be one of [1,-1,2,-2,3,-3]");
+    }
+  }
+  // start sort
+  int cmp_idx = lua_abs(opt);
+  Table* t = hvalue(luaA_index2value(L, 1));
+  // skip some situation
+  if (table_maxcount(t) <= 1) return 0;
+  if (table_isarray(t) && func_idx == 0) {
+    if (opt == -2) {
+      // 倒序数组。
+      for (int i = 0; i < t->count/2; i++){
+        TValue tmp = *get_array_val(t, i);
+        *get_array_val(t, i) = *get_array_val(t, t->count-i-1);
+        *get_array_val(t, t->count-i-1) = tmp;
+      }
+    }
+    else if(opt == 2){
+      return 0;// 数组按索引排序，无用。
+    }
+  }
+  // start work
+  if (cmp_idx != 3 && table_isarray(t)){
+    cmp_idx += 3;
+  }
+  FStableSortContext context;
+  context.func_idx = func_idx;
+  context.L = L;
+  context.t = t;
+  context.is_reverse = (opt < 0) ? -1 : 1;
+
+  size_t buffersize = sz_buffer(t);
+  if (buffersize > LUAL_BUFFERSIZE) {
+    void* buffer = luaL_newbigbuffer(L, buffersize);
+    _stable_sort_work(L, buffer, t, &context, cmp_idx);
+  }
+  else {
+    luaL_Buffer b;
+    void* buffer = luaL_buffinitsize(L, &b, buffersize);
+    _stable_sort_work(L, buffer, t, &context, cmp_idx);
+  }
+  return 0;
+}
+
+static int tablib_shrink(lua_State*L) {
+  luaL_checktype(L, 1, LUA_TTABLE);
+  Table* t = hvalue(luaA_index2value(L, 1));
+  luaH_try_shrink(L, t, 1, 1, 0);
+  return 0;
+}
+
+static int tablib_ismap(lua_State*L) {
+  int ok = lua_ismap(L, 1);
+  lua_pushboolean(L, ok);
+  return 1;
+}
+
+static int tablib_isarray(lua_State*L) {
+  int ok = lua_isarray(L, 1);
+  lua_pushboolean(L, ok);
+  return 1;
 }
 
 static const luaL_Reg tab_funcs[] = {
@@ -469,6 +809,10 @@ static const luaL_Reg tab_funcs[] = {
   {"newarray", newarray},
   {"get_capacity", get_capacity},
   {"next", tablib_next},
+  {"stable_sort", stable_sort},
+  {"shrink", tablib_shrink},
+  {"ismap", tablib_ismap},
+  {"isarray", tablib_isarray},
   {NULL, NULL}
 };
 

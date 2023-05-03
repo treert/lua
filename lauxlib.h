@@ -188,6 +188,7 @@ LUALIB_API void (luaL_requiref) (lua_State *L, const char *modname,
 ** =======================================================
 */
 
+// 这个地方用c++的模板的话会非常棒。可惜。
 struct luaL_Buffer {
   char *b;  /* buffer address */
   size_t size;  /* buffer size */
@@ -213,6 +214,7 @@ struct luaL_Buffer {
 #define luaL_buffsub(B,s)	((B)->n -= (s))
 
 LUALIB_API void (luaL_buffinit) (lua_State *L, luaL_Buffer *B);
+// 这个实现有坑把。需要保证 placeholder or UBOX 在 -1 的位置。如果改了 top 不是炸了。
 LUALIB_API char *(luaL_prepbuffsize) (luaL_Buffer *B, size_t sz);
 LUALIB_API void (luaL_addlstring) (luaL_Buffer *B, const char *s, size_t l);
 LUALIB_API void (luaL_addstring) (luaL_Buffer *B, const char *s);
@@ -220,6 +222,13 @@ LUALIB_API void (luaL_addvalue) (luaL_Buffer *B);
 LUALIB_API void (luaL_pushresult) (luaL_Buffer *B);
 LUALIB_API void (luaL_pushresultsize) (luaL_Buffer *B, size_t sz);
 LUALIB_API char *(luaL_buffinitsize) (lua_State *L, luaL_Buffer *B, size_t sz);
+
+// 申请一块很大的内存. 
+// UBOX的idx时-1。可以立即记录下 lua_absindex(L, -1)
+// sz > LUAL_BUFFERSIZE。 这时，如果用 luaL_Buffer, 会直接浪费掉一片栈内存。
+LUALIB_API void *(luaL_newbigbuffer) (lua_State *L, size_t sz);
+// 最好不要使用. 旧的内容会保留。
+LUALIB_API void *(luaL_addbigbuffer) (lua_State *L, size_t sz, int boxidx);
 
 #define luaL_prepbuffer(B)	luaL_prepbuffsize(B, LUAL_BUFFERSIZE)
 

@@ -1,4 +1,17 @@
 
+
+local opts = {
+    test_standard = true,
+    test_map_array = true,
+    test_sort = true,
+}
+local loop_count = select(1,...) or 100000000 -- 一亿的耗时在1秒左右。太小了。测试不出什么。
+if (select(2,...) == 'all') then
+    for key, value in pairs(opts) do
+        opts[key] = true
+    end
+end
+
 -- http://lua-users.org/wiki/ObjectBenchmarkTests
 -- Benchmarking support.
 do
@@ -32,7 +45,7 @@ do
         end
     end
 end
-  
+
 function makeob1()
 local self = {data = 0}
 function self:test()  self.data = self.data + 1  end
@@ -69,8 +82,10 @@ addbenchmark("Direct Access", "ob.data = ob.data + 1", makeob1())
 
 addbenchmark("Local Variable", "ob = ob + 1", 0)
 
-local loop_count = select(1,...) or 100000000
-runbenchmarks(loop_count)
+if opts.test_standard then
+    runbenchmarks(loop_count)
+end
+
 function make_ob_table()
     local arr = {
         a1=1,
@@ -100,7 +115,9 @@ clearbenchmark()
 addbenchmark("table init", "ob.init()", make_ob_table())
 addbenchmark("table forin_and_set", "ob.forin_and_set()", make_ob_table())
 
-runbenchmarks(loop_count/4)
+if opts.test_map_array then
+    runbenchmarks(loop_count/4)
+end
 
 function make_ob_arr(size)
     size = size or 4
@@ -140,8 +157,33 @@ function test_array_size(arr_size)
     runbenchmarks(loop_count)
 end
 
-test_array_size(2)
-test_array_size(4)
-test_array_size(20)
-test_array_size(200)
-test_array_size(2000)
+if opts.test_map_array then
+    test_array_size(2)
+    test_array_size(4)
+    test_array_size(20)
+    test_array_size(200)
+    test_array_size(2000)
+end
+
+clearbenchmark()
+function make_ob_sort(size)
+    size = size or 4
+    local arr = {}
+    for i = 1, size do
+        arr[i] = i * 23142543 % 12353
+    end
+    return {
+        sort = function ()
+            if table.stable_sort then
+                table.stable_sort(arr)
+            else
+                table.sort(arr)
+            end
+        end,
+    }
+end
+if opts.test_sort then
+    local arr_size = 1000
+    addbenchmark("array["..arr_size.."] sort", "ob.sort()", make_ob_sort(arr_size))
+    runbenchmarks(loop_count // arr_size // 10)
+end
