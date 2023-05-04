@@ -744,14 +744,31 @@ static const luaL_Reg mathlib[] = {
   {NULL, NULL}
 };
 
+// 直接添加。不用 placeholders
+#define lmath_add_const(name,value) lua_pushnumber(L, value);lua_setfield(L, -2, #name);
 
 /*
 ** Open math library
 */
 LUAMOD_API int luaopen_math (lua_State *L) {
   luaL_newlib(L, mathlib);
-  lua_pushnumber(L, PI);
-  lua_setfield(L, -2, "pi");
+  // lua_pushnumber(L, PI);
+  // lua_setfield(L, -2, "pi");
+  // copy from c++20
+  lmath_add_const(e, 2.718281828459045);
+  lmath_add_const(log2e, 1.4426950408889634);
+  lmath_add_const(log10e, 0.4342944819032518);
+  lmath_add_const(pi, 3.141592653589793);// 看上去精度 没 PI 定义的高。
+  lmath_add_const(inv_pi, 0.3183098861837907);
+  lmath_add_const(inv_sqrtpi, 0.5641895835477563);
+  lmath_add_const(ln2, 0.6931471805599453);
+  lmath_add_const(ln10, 2.302585092994046);
+  lmath_add_const(sqrt2, 1.4142135623730951);
+  lmath_add_const(sqrt3, 1.7320508075688772);
+  lmath_add_const(inv_sqrt3, 0.5773502691896257);
+  lmath_add_const(egamma, 0.5772156649015329);
+  lmath_add_const(phi, 1.618033988749895);
+
   lua_pushnumber(L, (lua_Number)HUGE_VAL);
   lua_setfield(L, -2, "huge");
   lua_pushinteger(L, LUA_MAXINTEGER);

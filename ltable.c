@@ -46,14 +46,16 @@ HashTable 的实现算法来自 dotnet。和 lua 自带的有很大差别，是�
 */
 
 /// Hash Function For Data
-// lua float
+// lua float 来自 dotnet 的实现
 inline static int32_t gethash_double(double number){
   int64_t num = *(int64_t*)(&number);
-	if (((num - 1) & 0x7FFFFFFFFFFFFFFFL) >= 9218868437227405312L)
-	{
-		num &= 0x7FF0000000000000L;
-	}
-	return (int32_t)num ^ (int32_t)(num >> 32);
+  // Optimized check for IsNan() || IsZero()
+  if (((num - 1) & 0x7FFFFFFFFFFFFFFFL) >= 9218868437227405312L)
+  {
+    // Ensure that all NaNs and both zeros have the same hash code
+    num &= 0x7FF0000000000000L;
+  }
+  return (int32_t)num ^ (int32_t)(num >> 32);
 }
 
 // lua integer
@@ -247,6 +249,7 @@ static Node* getgeneric_node(Table *t, const TValue *key) {
 
 int luaH_next (lua_State *L, Table *t, StkId key) {
   if(table_count(t) == 0) return 0;
+  // doc@om 发现个问题。float 类型的 1.0 也会不支持，不过不打算做什么。
   if(table_isarray(t)){
     // for array
     lua_Integer idx = INT32_MAX;

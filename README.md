@@ -132,7 +132,7 @@ map 的实现多了一层索引。性能差于lua table。大致 多耗时 30%~5
 |1.059   |1.744   |1.65     | array[2000] init
 |0.45    |0.678   |1.51     | array[2000] reset
 |1.521   |0.287   |0.19     | array[2000] forin
-|0.966   |0.473   |0.49     | array[2000] forin
+|0.966   |0.473   |0.49     | array[2000] sort vs stable_sort
 
 ### 旧的测试数据，包含了 Array 的测试.
 [test-performance](./testes/test-performance.lua) 旧的测试代码. 里面包含的不兼容lua的代码。Array 和 lua 纯粹使用数组差不多。
