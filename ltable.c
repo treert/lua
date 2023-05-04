@@ -39,9 +39,6 @@
 #include "ltable.h"
 #include "lvm.h"
 
-// only for read
-#define array_idx(t,idx)      (idx = idx < 0 ? table_count(t) + idx + 1 : idx)
-
 /* 
 HashTable 的实现算法来自 dotnet。和 lua 自带的有很大差别，是个纯粹的hash表。
 1. 数组部分打算单独实现个Array，感觉那样更好。【一个重要的原因是，数组空洞和数组长度有冲突，不好处理。纯粹的hash表没这个问题】
@@ -510,8 +507,6 @@ void luaH_free (lua_State *L, Table *t) {
 const TValue *luaH_getint (Table *t, lua_Integer key) {
   if(table_isarray(t)){
     // for array
-    // 语法糖
-    key = array_idx(t,key);
     if ( 0 < key && key <= t->count){
       return get_array_val(t, key-1);
     }
@@ -570,7 +565,6 @@ const TValue *luaH_get (Table *t, const TValue *key) {
     else if (ttypetag(key) == LUA_VNUMFLT) {
       luaV_flttointeger(fltvalue(key), &idx, F2Ieq); /* integral index? */
     }
-    idx = array_idx(t,idx);
     if ( 0 < idx && idx <= t->count){
       return get_array_val(t, idx-1);
     }
@@ -627,6 +621,7 @@ void luaH_finishset (lua_State *L, Table *t, const TValue *key,
       else{
         luaG_typeerror(L, key, "index array with");
       }
+
       luaH_newarrayitem(L, t, idx, value);
     }
     else {
@@ -721,7 +716,7 @@ void luaH_newkey (lua_State *L, Table *t, const TValue *key, TValue *value) {
 
 void luaH_newarrayitem (lua_State *L, Table *t, lua_Integer idx, TValue *value) {
   lua_assert(table_isarray(t));
-  if (idx < 0){
+  if (idx <= 0){
     luaG_runerror(L, "array index must > 0.");
   }
   lua_assert(idx > t->count);

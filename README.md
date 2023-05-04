@@ -102,7 +102,6 @@ mylua 把 table 分成了纯粹的 map,array 两个结构。默认是 map。
   - 内存分配激进，**`array[2^30]=1`这个代码会分配16G内存！！！**。
   - getset 的性能高出map一倍，性能和lua的table的数组部分相当。
     - 【不要因为性能选择 array, 按使用需求选择】
-  - 数组默认支持负数索引。-1 是结尾元素。只支持读写已有的元素。
 
 通过 array + metatable + map, 可以模拟一个 lua 的 table. 不过性能就堪忧了。
 ## mylua 性能测试
