@@ -781,6 +781,12 @@ static int stable_sort(lua_State *L) {
 static int tablib_shrink(lua_State*L) {
   luaL_checktype(L, 1, LUA_TTABLE);
   Table* t = hvalue(luaA_index2value(L, 1));
+  int resize_mem = 1;
+  if (lua_gettop(L) == 2) {
+    lua_Integer opt = luaL_optinteger(L, 2, 1);
+    resize_mem = opt == 1 ? 0 : 1;
+  }
+  
   luaH_try_shrink(L, t, 1, 1, 0);
   return 0;
 }
@@ -797,6 +803,73 @@ static int tablib_isarray(lua_State*L) {
   return 1;
 }
 
+static int tablib_push(lua_State *L) {
+  int n = lua_gettop(L);
+  if (n < 2) {
+    lua_pushinteger(L, 0);
+    return 1;// throw error ?
+  }
+  luaL_checktype(L, 1, LUA_TTABLE);
+  Table* t = hvalue(luaA_index2value(L, 1));
+  int precount = table_count(t);
+  for (int i = 1; i < n; i++){
+    TValue* val = luaA_index2value(L, i+1);
+    if l_likely(!ttisnil(val)) {
+      int idx = table_count(t) + 1;
+      luaH_setint(L, t, idx, val);
+      // 不需要 invalidateTMcache
+      luaC_barrierback(L, obj2gco(t), val);
+    }
+  }
+  lua_pushinteger(L, table_count(t) - precount);// 实际push的元素个数
+  return 1;
+}
+
+static int tablib_pop(lua_State *L) {
+  luaL_checktype(L, 1, LUA_TTABLE);
+  Table* t = hvalue(luaA_index2value(L, 1));
+  int n = (int)luaL_optinteger(L, 2, 1);
+  if (n <= 0) {
+    return 0;
+  }
+  n = lua_min(table_count(t),n);
+  lua_checkstack(L, n);
+  int i = 0;
+  for (; i < n; i++) {
+    TValue* slot = (TValue*)luaH_getint(t, table_count(t));
+    if l_unlikely(isabstkey(slot)) {
+      break;// 没办法继续弹出了
+    }
+    luaA_pushvalue(L, slot);
+    luaH_remove(t, nodefromval(slot));// delete it
+  }
+  return i;
+}
+
+static int tablib_trim(lua_State *L) {
+  luaL_checktype(L, 1, LUA_TTABLE);
+  Table* t = hvalue(luaA_index2value(L, 1));
+  // 不改变内存大小。
+  luaH_try_shrink(L, t, 2, 0, 0);
+  return 0;
+}
+
+static int tablib_setlocksize(lua_State *L) {
+  luaL_checktype(L, 1, LUA_TTABLE);
+  Table* t = hvalue(luaA_index2value(L, 1));
+  int32_t size = (int32_t)luaL_checkinteger(L, 2);
+  luaH_setlocksize(L, t, size);
+  return 0;
+}
+
+static int tablib_getlocksize(lua_State *L) {
+  luaL_checktype(L, 1, LUA_TTABLE);
+  Table* t = hvalue(luaA_index2value(L, 1));
+  int32_t size = luaH_getlocksize(L, t);
+  lua_pushinteger(L, size);
+  return 1;
+}
+
 static const luaL_Reg tab_funcs[] = {
   {"concat", tconcat},
   {"insert", tinsert},
@@ -810,9 +883,16 @@ static const luaL_Reg tab_funcs[] = {
   {"get_capacity", get_capacity},
   {"next", tablib_next},
   {"stable_sort", stable_sort},
-  {"shrink", tablib_shrink},
   {"ismap", tablib_ismap},
   {"isarray", tablib_isarray},
+  // 这些操作无视元表。
+  {"shrink", tablib_shrink},
+  {"push", tablib_push},
+  {"pop", tablib_pop},
+  {"trim", tablib_trim},
+  //
+  {"setlocksize", tablib_setlocksize},
+  {"getlocksize", tablib_getlocksize},
   {NULL, NULL}
 };
 

@@ -36,6 +36,8 @@ LUAI_FUNC void luaH_remove (Table *t, Node *node);
 
 LUAI_FUNC void luaH_addsize (lua_State *L, Table *t, int32_t addsize);
 LUAI_FUNC void luaH_resize (lua_State *L, Table *t, unsigned int nasize, unsigned int nhsize);
+LUAI_FUNC void luaH_setlocksize (lua_State *L, Table *t, int32_t size);
+LUAI_FUNC int32_t luaH_getlocksize (lua_State *L, Table *t);
 /* 
    rehash map and remove empty slot OR trim array.**may change t->count**
    数组允许空洞，所以用 also_for_array 控制。默认不处理数组。

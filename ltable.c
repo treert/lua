@@ -364,8 +364,7 @@ static void resize_table_mem(lua_State *L, Table *t, int need_rehash_map){
 }
 
 /*
-  增加size，能够继续放入 addsize 个元素。【数组的空洞也占位置的】
-  HashTable 默认只增加，不减小。【 shrink 可以减小内存】
+  增加容量，**不改变 count**.
 */
 void luaH_addsize (lua_State *L, Table *t, int32_t addsize){
   if (addsize <= 0) return;
@@ -376,7 +375,7 @@ void luaH_addsize (lua_State *L, Table *t, int32_t addsize){
     luaG_runerror(L, "table overflow");
   }
   if(t->data != NULL){
-    if(lsize <= t->lsizenode) return;// 空洞很多
+    if(lsize <= t->lsizenode) return;// 容量足够
   }
   // for array
   if (table_isarray(t)){
@@ -403,21 +402,40 @@ void luaH_resize (lua_State *L, Table *t, unsigned int newasize, unsigned int nh
   luaH_addsize(L, t, newasize + nhsize - count);
 }
 
+void luaH_setlocksize (lua_State *L, Table *t, int32_t size) {
+  if (table_isarray(t)){
+    // 其实应该校验下的。特别是 0 < size < count 时。还没想好，先这么着
+    t->freelist = size;
+  }
+}
+
+int32_t luaH_getlocksize (lua_State *L, Table *t) {
+  if (table_isarray(t)) {
+    return t->freelist;
+  }
+  return 0;
+}
+
 void luaH_try_shrink (lua_State *L, Table *t, int also_for_array, int resize_mem, int force_rehash) {
   if(table_maxcount(t) == 0) return;
   if (table_ismap(t)){
     int32_t maxcount = table_maxcount(t);
     int32_t valid_count = 0;
-    for (valid_count = 0; valid_count < maxcount; valid_count++) {
-      Node *n = gnode(t, valid_count);
-      if l_unlikely(isempty(gval(n)))
-        break;
+    if l_likely(t->freecount == 0) {
+      valid_count = maxcount;
     }
-    for (int i = valid_count + 1; i < maxcount; i++){
-      Node *n = gnode(t, i);
-      if (!isempty(gval(n))){
-        *gnode(t, valid_count) = *n;
-        valid_count++;
+    else {
+      for (valid_count = 0; valid_count < maxcount; valid_count++) {
+        Node *n = gnode(t, valid_count);
+        if l_unlikely(isempty(gval(n)))
+          break;
+      }
+      for (int i = valid_count + 1; i < maxcount; i++){
+        Node *n = gnode(t, i);
+        if (!isempty(gval(n))){
+          *gnode(t, valid_count) = *n;
+          valid_count++;
+        }
       }
     }
     int need_rehash = force_rehash || (valid_count < maxcount);// count 变化，说明有移动发生
@@ -446,7 +464,7 @@ void luaH_try_shrink (lua_State *L, Table *t, int also_for_array, int resize_mem
       TValue *n = get_array_val(t, i);
       if (!isempty(n)) {
         *get_array_val(t, valid_count) = *n;
-        valid_count++;//
+        valid_count++;
       }
     }
     if (valid_count < t->count) {
@@ -723,8 +741,11 @@ void luaH_newarrayitem (lua_State *L, Table *t, lua_Integer idx, TValue *value) 
     luaG_runerror(L, "array index must > 0.");
   }
   lua_assert(idx > t->count);
+  if (t->freelist > 0 && idx > t->freelist) {
+    luaG_runerror(L, "array is locked, index must <= %d.", t->freelist);
+  }
   if (idx > MAX_ARRAY_IDX){
-    luaG_runerror(L, "array index to big. max support is %d", MAX_ARRAY_IDX);
+    luaG_runerror(L, "array index to big. max support is %d.", MAX_ARRAY_IDX);
   }
   int32_t newcount = (int)idx;
   // grow array

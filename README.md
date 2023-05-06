@@ -87,6 +87,10 @@ mylua 把 table 分成了纯粹的 map,array 两个结构。默认是 map。
 - `table.isarray(t)`
 - `table.shrink(t)` 压缩 table 的空洞。【会尝试减少内存】
 - `table.stable_sort(t,opt1,opt2)` 稳定排序。
+- `table.push(t,...)`
+- `table.pop(t,n?)`
+- `table.setlocksize(t,size)` 锁定数组最大索引，不允许太大的索引，随手加的。也许有用。
+  - `table.getlocksize(t) => size`
 
 ## mylua table 内部实现 
 使用类似 dotnet 的 Dictionary 实现方案。功能上更符合我的需要。

@@ -169,4 +169,23 @@ assert(a[1] == 1 and a[2] == 2)
 local func,msg = load("print(a[])") -- 这个是语义级别的错误。用pcall是不行的。编译就报错了
 assert(func == nil and string.find(msg, "t[]",1,1))
 
+print("test push pop")
+local a = {1,2,3,4,5}
+table.push(a, 6,7,8,9)
+assert(#a == 9 and a[9] == 9)
+local a9,a8,a7 = table.pop(a, 2)
+assert(#a == 7 and a8 == 8 and a7 == nil)
+
+local a = [1,2,3,nil,nil,6]
+a[6] = nil
+assert(#a == 6)
+table.trim(a)
+assert(#a == 3)
+
+table.setlocksize(a, 5)
+local ok,msg = pcall(function ()
+    a[6] = 1
+end)
+assert(not ok and string.find(msg, "locked"))
+
 print "end test array"

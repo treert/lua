@@ -343,6 +343,7 @@ typedef struct GCObject {
 /* Variant tags for strings */
 #define LUA_VSHRSTR	makevariant(LUA_TSTRING, 0)  /* short strings */
 #define LUA_VLNGSTR	makevariant(LUA_TSTRING, 1)  /* long strings */
+#define LUA_VFIXSTR	makevariant(LUA_TSTRING, 1)  /* const strings */
 
 #define ttisstring(o)		checktype((o), LUA_TSTRING)
 #define ttisshrstring(o)	checktag((o), ctb(LUA_VSHRSTR))
@@ -727,7 +728,7 @@ typedef union Node {
 #define MAX_LOG_SIZE        30
 #define MAX_ARRAY_IDX       ((size_t)1 << MAX_LOG_SIZE)
 #define table_count(t)      ((t)->count - (t)->freecount)
-// 最大的有效长度。小心使用
+// 最大的有效长度。map: 包含了空洞在内。array: 等于 table_count
 #define table_maxcount(t)   ((t)->count)
 
 // for map
@@ -760,7 +761,7 @@ typedef struct Table {
 
   int32_t count;// table_count = count - freecount
   int32_t freecount;// map: 空洞的数量. array:0,不记录空洞数量，麻烦。
-  int32_t freelist;// map 下的空洞链表头。freecount > 0 时有用。
+  int32_t freelist;// map 下的空洞链表头。freecount > 0 时有用. array: 用于锁定数组大小(先这么用着)。
 
   void *data;// TValue* for array, Node*+int32_t* for map
 

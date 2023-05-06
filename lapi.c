@@ -56,6 +56,7 @@ const char lua_ident[] =
 ** Convert an acceptable index to a pointer to its respective value.
 ** Non-valid indices return the special nil value 'G(L)->nilvalue'.
 ** doc@om 0 是 invalid index
+** 这儿不需要用 api_check 吧。如果遇到问题。我就注释掉了。
 */
 static TValue *index2value (lua_State *L, int idx) {
   CallInfo *ci = L->ci;

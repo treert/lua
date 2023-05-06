@@ -408,6 +408,8 @@ LUA_API void (lua_closeslot) (lua_State *L, int idx);
 */
 
 #define lua_abs(i)    ((i)<0?-i:i)
+#define lua_max(a,b) (((a) > (b)) ? (a) : (b))
+#define lua_min(a,b) (((a) < (b)) ? (a) : (b))
 
 /* }============================================================== */
 
