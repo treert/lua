@@ -14,11 +14,13 @@ include_directories ( src ${CMAKE_CURRENT_BINARY_DIR} )
 set ( SRC_CORE
     lapi.c     lbaselib.c  lcorolib.c  ldblib.c  ldo.c    lfunc.c  linit.c   llex.c      lmem.c     lobject.c   loslib.c   lstate.c   lstrlib.c  ltablib.c  ltm.c    lutf8lib.c  lzio.c
     lauxlib.c  lcode.c     lctype.c    ldebug.c  ldump.c  lgc.c    liolib.c  lmathlib.c  loadlib.c  lopcodes.c  lparser.c  lstring.c  ltable.c   ltests.c  lundump.c  lvm.c
+    my_fix_string.c
 )
 
 set ( SRC_HEADER
     lapi.h  lauxlib.h  lcode.h  lctype.h  ldebug.h  ldo.h  lfunc.h  lgc.h  ljumptab.h  llex.h  llimits.h  lmem.h  lobject.h  lopcodes.h
     lopnames.h  lparser.h  lprefix.h  lstate.h  lstring.h  ltable.h  ltests.h  ltm.h  lua.h  luaconf.h  lualib.h  lundump.h  lvm.h  lzio.h
+    my_fix_string.h
 )
 
 set ( SRC_LUA lua.c )
