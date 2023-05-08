@@ -40,9 +40,4 @@ MY_API int my_fixstring_init(const char** strs);
 MY_API const char* my_fixstring_check(const char* str, size_t len);
 
 
-
-#ifdef __cplusplus
-}
-#endif
-
 #endif /* MY_FIX_STRING_H */

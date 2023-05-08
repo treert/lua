@@ -3,6 +3,14 @@ cmake_minimum_required(VERSION 3.6)
 # 还会突然坏掉，哎。再出一次问题，就在bat里加参数吧。cmake -DCMAKE_INSTALL_PREFIX=C:/MyExe ..
 # SET(CMAKE_INSTALL_PREFIX "C:/MyExe" CACHE PATH "my exe dir")
 
+set(CMAKE_C_STANDARD 17)
+
+# https://zhuanlan.zhihu.com/p/616871895 稍微清楚点
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)  # C++ 11 是强制要求，不会衰退至低版本
+set(CMAKE_CXX_EXTENSIONS OFF)  # 禁止使用编译器特有扩展
+# set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17")
+
 GET_FILENAME_COMPONENT(PROJECT_NAME ${CMAKE_CURRENT_SOURCE_DIR} NAME)
 project(${PROJECT_NAME})
 #message(${PROJECT_NAME})

@@ -21,7 +21,6 @@
 #include "lauxlib.h"
 #include "lualib.h"
 
-
 /*
 ** {==================================================================
 ** List of valid conversion specifiers for the 'strftime' function;
@@ -403,7 +402,6 @@ static int os_exit (lua_State *L) {
   return 0;
 }
 
-
 static const luaL_Reg syslib[] = {
   {"clock",     os_clock},
   {"date",      os_date},
@@ -416,6 +414,7 @@ static const luaL_Reg syslib[] = {
   {"setlocale", os_setlocale},
   {"time",      os_time},
   {"tmpname",   os_tmpname},
+  {"ccxx", NULL},
   {NULL, NULL}
 };
 
@@ -425,6 +424,59 @@ static const luaL_Reg syslib[] = {
 
 LUAMOD_API int luaopen_os (lua_State *L) {
   luaL_newlib(L, syslib);
+
+  // https://stackoverflow.com/questions/36662063/how-can-i-know-the-version-of-c
+  #ifdef __augmented
+      #define Prefix "@"//if is @C .. augmented version of C programming language etc.
+  #else
+      #define Prefix ""//not augmented
+  #endif
+
+  #ifdef __cplusplus
+      #define Suffix "++"
+      #if __cplusplus == 1
+          #undef __cplusplus
+          #define __cplusplus 199711
+      #endif
+      #define Number __cplusplus
+      #define Year (__cplusplus / 100)
+      #define Month (__cplusplus % 100)
+      #define Type "CPP"
+  #else
+      #define Suffix ""
+      #ifdef __STDC_VERSION__
+          #define Number __STDC_VERSION__
+          #define Year (__STDC_VERSION__ / 100)
+          #define Month (__STDC_VERSION__ % 100)
+          #define Type "STD"
+      #else
+          #define Number 0
+          #define Month 0
+          #ifdef __STRICT_ANSI__
+              #define Year 1989
+              #define Type "ANSI"
+          #else
+              #ifdef __STDC__
+                  #define Year 1990
+                  #define Type "ISO"
+              #else
+                  #define Year 1972
+                  #define Type "K&R"
+              #endif
+          #endif
+      #endif
+  #endif
+
+  #ifdef NDEBUG
+    #define MY_DEBUG "release"
+  #else
+    #define MY_DEBUG "debug"
+  #endif
+  char ver[100];
+  sprintf(ver, "%sC%s%02ld %ld/%02ld %s %ld %s", Prefix, Suffix, Year % 100, Year, Month, Type, Number
+                                                , MY_DEBUG);
+  lua_pushstring(L, ver);
+  lua_setfield(L, -2, "ccxx");
   return 1;
 }
 
