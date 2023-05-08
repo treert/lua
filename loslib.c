@@ -472,9 +472,28 @@ LUAMOD_API int luaopen_os (lua_State *L) {
   #else
     #define MY_DEBUG "debug"
   #endif
+
+  #ifdef LUAI_ASSERT
+  #define MY_Assert "assert-on"
+  #else
+  #define MY_Assert "assert-off"
+  #endif
+
+  #ifdef LUA_USE_C89
+  #define MY_USE_C89 "use-c89"
+  #else
+  #define MY_USE_C89 ""
+  #endif
+  
+  #ifdef LUA_DL_DLL
+  #define MY_DLL "dll"
+  #else
+  #define MY_DLL "lib"
+  #endif
+
   char ver[100];
-  sprintf(ver, "%sC%s%02ld %ld/%02ld %s %ld %s", Prefix, Suffix, Year % 100, Year, Month, Type, Number
-                                                , MY_DEBUG);
+  sprintf(ver, "%sC%s%02ld %ld/%02ld %s %ld %ld-bit %s %s %s %s", Prefix, Suffix, Year % 100, Year, Month, Type, Number
+                          , sizeof(void*)*8, MY_DEBUG, MY_Assert, MY_DLL, MY_USE_C89);
   lua_pushstring(L, ver);
   lua_setfield(L, -2, "ccxx");
   return 1;
