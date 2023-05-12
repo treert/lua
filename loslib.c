@@ -493,7 +493,7 @@ LUAMOD_API int luaopen_os (lua_State *L) {
 
   char ver[100];
   sprintf(ver, "%sC%s%02ld %ld/%02ld %s %ld %ld-bit %s %s %s %s", Prefix, Suffix, Year % 100, Year, Month, Type, Number
-                          , sizeof(void*)*8, MY_DEBUG, MY_Assert, MY_DLL, MY_USE_C89);
+                          , (int)sizeof(void*)*8, MY_DEBUG, MY_Assert, MY_DLL, MY_USE_C89);
   lua_pushstring(L, ver);
   lua_setfield(L, -2, "ccxx");
   return 1;
