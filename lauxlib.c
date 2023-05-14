@@ -509,7 +509,7 @@ static void newbox (lua_State *L) {
 }
 
 static UBox* check_box(lua_State *L, int boxidx) {
-  UBox *box = luaL_checkudata(L, boxidx, newbox_tname);
+  UBox *box = (UBox*)luaL_checkudata(L, boxidx, newbox_tname);
   return box;
 }
 

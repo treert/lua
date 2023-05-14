@@ -96,7 +96,7 @@ static int32_t gethash(const TValue *key) {
     }
     case LUA_VLCF: {
       lua_CFunction f = fvalue(key);
-      return gethash_ptr(f);
+      return gethash_ptr((void*)f);
     }
     default: {
       GCObject *o = gcvalue(key);
