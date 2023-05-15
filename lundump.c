@@ -113,7 +113,7 @@ static TString *loadStringN (LoadState *S, Proto *p) {
   size_t size = loadSize(S);
   if (size == 0)  /* no string? */
     return NULL;
-  else if (--size <= LUAI_MAXSHORTLEN) {  /* short string? */
+  else if (--size < LUAI_MAXSHORTLEN) {  /* short string? */
     char buff[LUAI_MAXSHORTLEN];
     loadVector(S, buff, size);  /* load string into buffer */
     ts = luaS_newlstr(L, buff, size);  /* create string */

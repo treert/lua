@@ -283,6 +283,7 @@ static int pairscont (lua_State *L, int status, lua_KContext k) {
 
 static int luaB_pairs (lua_State *L) {
   luaL_checkany(L, 1);
+  // todo@om 这种写法非常慢。 __pairs 的比较得用字符串相等来。
   if (luaL_getmetafield(L, 1, "__pairs") == LUA_TNIL) {  /* no metamethod? */
     // compat@om 保持最大的兼容。pairs(table) => table
     luaL_checktype(L, 1, LUA_TTABLE);

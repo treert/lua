@@ -198,6 +198,7 @@ typedef l_uint32 Instruction;
 ** internalized. (Cannot be smaller than reserved words or tags for
 ** metamethods, as these strings must be internalized;
 ** #("function") = 8, #("__newindex") = 10.)
+** mod@om lua里这个长度不包括结尾的\0, mylua 包含。【原因是想实现一个常量池子的概念】
 */
 #if !defined(LUAI_MAXSHORTLEN)
 #define LUAI_MAXSHORTLEN	40
