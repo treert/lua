@@ -335,7 +335,7 @@ static void rehash_map(Table *t){
   }
 }
 
-// 重新选择数组的内存大小。【指挥减小内存】
+// 重新选择数组的内存大小。【只会减小内存】
 static void resize_table_mem(lua_State *L, Table *t, int need_rehash_map){
   if (t->data == NULL) return;// 不可能再减少了
   
@@ -383,8 +383,7 @@ void luaH_addsize (lua_State *L, Table *t, int32_t addsize){
     size_t newsize = getarraymemsize(lsize);
     t->data = luaM_realloc(L, t->data, oldsize, newsize);
     t->lsizenode = lsize;
-    // fill nil
-    memset((int8_t*)t->data + oldsize, 0, newsize - oldsize);
+    // not need fill nil
     return;
   }
   // for map
@@ -397,9 +396,38 @@ void luaH_addsize (lua_State *L, Table *t, int32_t addsize){
   rehash_map(t);
 }
 
-void luaH_resize (lua_State *L, Table *t, unsigned int newasize, unsigned int nhsize) {
-  int count = table_count(t);
-  luaH_addsize(L, t, newasize + nhsize - count);
+void luaH_reserve (lua_State *L, Table *t, int32_t size) {
+  int32_t count = table_count(t);
+  luaH_addsize(L, t, size - count);
+}
+
+/*
+修改表格的大小。map 和 array 有很大差别.
+1. map： 调用 luaH_reserve 提前腾出容量
+2. array: 会真的修改数组的大小。
+ */
+void luaH_resize (lua_State *L, Table *t, int32_t new_size) {
+  if l_unlikely(new_size < 0) {
+    luaG_runerror(L, "table.resize need >= 0, get %d", new_size);
+    return;
+  }
+  if l_unlikely(table_ismap(t)) {
+    luaH_reserve(L, t, new_size);
+    return;
+  }
+  lua_assert(t->freecount == 0);
+  int count = t->count;
+  if (count >= new_size) {
+    t->count = new_size;
+    // do nothing else
+  }
+  else {
+    luaH_addsize(L, t, new_size - t->count);
+    for (int i = t->count; i < new_size; i++) {
+      setnilvalue(get_array_val(t, i));
+    }
+    t->count = new_size;
+  }
 }
 
 void luaH_setlocksize (lua_State *L, Table *t, int32_t size) {
@@ -468,7 +496,6 @@ void luaH_try_shrink (lua_State *L, Table *t, int also_for_array, int resize_mem
       }
     }
     if (valid_count < t->count) {
-      memset((TValue*)t->data + valid_count, 0, t->count - valid_count);// 防止野指针之类的。数组扩容很暴力的。
       t->count = valid_count;
     }
   }
@@ -737,20 +764,15 @@ void luaH_newkey (lua_State *L, Table *t, const TValue *key, TValue *value) {
 
 void luaH_newarrayitem (lua_State *L, Table *t, lua_Integer idx, TValue *value) {
   lua_assert(table_isarray(t));
-  if (idx <= 0){
-    luaG_runerror(L, "array index must > 0.");
-  }
-  lua_assert(idx > t->count);
-  if (t->freelist > 0 && idx > t->freelist) {
-    luaG_runerror(L, "array is locked, index must <= %d.", t->freelist);
-  }
-  if (idx > MAX_ARRAY_IDX){
-    luaG_runerror(L, "array index to big. max support is %d.", MAX_ARRAY_IDX);
-  }
+  // 做了极大的限制，array只能一个一个的加
   int32_t newcount = (int)idx;
+  if l_unlikely(t->count+1 != newcount) {
+    luaG_runerror(L, "array can only add at last, may use table.resize before.");
+    return;
+  }
   // grow array
   if (t->data == NULL || newcount > twoto(t->lsizenode)){
-    luaH_addsize(L, t, newcount - t->count);
+    luaH_addsize(L, t, 1);
   }
   t->count = newcount;
   setobj2array(L, get_array_val(t, newcount-1), value);

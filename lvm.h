@@ -86,7 +86,7 @@ typedef enum {
   (!ttistable(t)  \
    ? (slot = NULL, 0)  /* not a table; 'slot' is NULL and result is 0 */  \
    : (slot = f(hvalue(t), k),  /* else, do raw access */  \
-      !isempty(slot)))  /* result not empty? */
+      !isabstkey(slot)))  /* result not empty? */
 
 
 /*
@@ -97,7 +97,7 @@ typedef enum {
   (!ttistable(t)  \
    ? (slot = NULL, 0)  /* not a table; 'slot' is NULL and result is 0 */  \
    : (slot = luaH_getint(hvalue(t), k),\
-      !isempty(slot)))  /* result not empty? */
+      !isabstkey(slot)))  /* result not empty? */
 
 // #define luaV_fastgeti(L,t,k,slot) \
 //   ((ttisarray(t) && l_castS2U(k) - 1u < hvalue(t)->count) \

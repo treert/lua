@@ -35,7 +35,8 @@ LUAI_FUNC void luaH_newarrayitem (lua_State *L, Table *t, lua_Integer idx, TValu
 LUAI_FUNC void luaH_remove (Table *t, Node *node);
 
 LUAI_FUNC void luaH_addsize (lua_State *L, Table *t, int32_t addsize);
-LUAI_FUNC void luaH_resize (lua_State *L, Table *t, unsigned int nasize, unsigned int nhsize);
+LUAI_FUNC void luaH_reserve (lua_State *L, Table *t, int32_t size);
+LUAI_FUNC void luaH_resize (lua_State *L, Table *t, int32_t new_size);
 LUAI_FUNC void luaH_setlocksize (lua_State *L, Table *t, int32_t size);
 LUAI_FUNC int32_t luaH_getlocksize (lua_State *L, Table *t);
 /* 

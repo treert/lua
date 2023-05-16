@@ -9,7 +9,7 @@ local arr = [1,2]
 local ok,msg = pcall(function ()
     arr[101] = 1
 end)
-assert(ok and #arr == 101)
+assert(not ok and string.find(msg, "table.resize"))
 ok,msg = pcall(function ()
     arr[-1] = 1
 end)
@@ -122,7 +122,8 @@ local onek = 2^10
 collectgarbage()
 local mm1 = collectgarbage("count")
 local a = []
-a[size*onek] = 1
+table.resize(a, size*onek)
+-- print(#a)
 local mm2 = collectgarbage("count")
 local mmt1,mmt2
 do 
@@ -153,6 +154,7 @@ assert(mm2 - mm1 > size and mm2 - mm3 > size)
 
 local mm1 = collectgarbage("count")
 local a = []
+table.resize(a, size*onek)
 a[size*onek] = 1
 table.stable_sort(a)
 local mm2 = collectgarbage("count")
@@ -179,13 +181,9 @@ assert(#a == 7 and a8 == 8 and a7 == nil)
 local a = [1,2,3,nil,nil,6]
 a[6] = nil
 assert(#a == 6)
+a[] = nil
+assert(#a == 7)
 table.trim(a)
 assert(#a == 3)
-
-table.setlocksize(a, 5)
-local ok,msg = pcall(function ()
-    a[6] = 1
-end)
-assert(not ok and string.find(msg, "locked"))
 
 print "end test array"

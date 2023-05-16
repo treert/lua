@@ -89,8 +89,9 @@ mylua 把 table 分成了纯粹的 map,array 两个结构。默认是 map。
 - `table.stable_sort(t,opt1,opt2)` 稳定排序。
 - `table.push(t,...)`
 - `table.pop(t,n?)`
-- `table.setlocksize(t,size)` 锁定数组最大索引，不允许太大的索引，随手加的。也许有用。
-  - `table.getlocksize(t) => size`
+- `table.setsize(t,size)` 
+  - array: 真的修改数组大小。
+  - map: 相当于 reserve size , 不会修改map内容。
 
 ## mylua table 内部实现 
 使用类似 dotnet 的 Dictionary 实现方案。功能上更符合我的需要。
@@ -103,7 +104,7 @@ mylua 把 table 分成了纯粹的 map,array 两个结构。默认是 map。
 - 默认初始化`{}`如果数组和kv混合，一般是kv在前。但是不保证。
 - 当前的实现方案，talbe的内存是固定的若干种。倍增分配。
 - array 额外提供的array就是个简单的数组
-  - 内存分配激进，**`array[2^30]=1`这个代码会分配16G内存！！！**。
+  - **数组只能从结尾处加元素。**这样使用起来比较安全，**不然`array[2^30]=1`这个代码会分配16G内存！！！**
   - getset 的性能高出map一倍，性能和lua的table的数组部分相当。
     - 【不要因为性能选择 array, 按使用需求选择】
 

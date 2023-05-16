@@ -21,7 +21,13 @@
 #include "lauxlib.h"
 #include "lualib.h"
 
-// 方便. 最好不要这么做。
+/*
+一些说明：
+1. lua 没有引用下面的这些文件。在lua里。这个lib库就像第三方来实现扩展库一样，它不知道内部的具体接口，只能通过有限的接口来操作。
+   mylua 为什么实现方便，突破了这个限制。
+2. 有些想把 table 的api全部限制到操作table上。lua的实现，可以透过元表使用table的接口修改到userdata的。
+   【但是觉得这样不好。犹豫中。】
+*/
 #include "lapi.h"
 #include "ltable.h"
 #include "lvm.h"
@@ -190,6 +196,7 @@ static int tpack (lua_State *L) {
   int n = lua_gettop(L);  /* number of elements to pack */
   // mod@om table.pack 也适合用 array
   lua_createarray(L, n);
+  lua_table_resize(L, -1, n);
   // lua_createtable(L, n, 0);  /* create result table */
   lua_insert(L, 1);  /* put it at index 1 */
   for (i = n; i >= 1; i--)  /* assign elements */
@@ -682,7 +689,7 @@ static void _stable_sort_work(lua_State *L, void* b, Table *t,
     }
     lua_assert(sizeof(Node) == sz_map);
     memcpy(t->data, b, sz_buffer(t));
-    luaH_try_shrink(L, t, 0, 1, 1);
+    luaH_try_shrink(L, t, 0, 0, 1);
   }
 }
 
@@ -764,6 +771,11 @@ static int stable_sort(lua_State *L) {
   context.L = L;
   context.t = t;
   context.is_reverse = (opt < 0) ? -1 : 1;
+
+  if (table_ismap(t)) {
+    // 先压缩下 map 这样排序时应该不用考虑nil了。
+    luaH_try_shrink(L, t, 0, 0, 0);
+  }
 
   size_t buffersize = sz_buffer(t);
   if (buffersize > LUAL_BUFFERSIZE) {
@@ -854,20 +866,12 @@ static int tablib_trim(lua_State *L) {
   return 0;
 }
 
-static int tablib_setlocksize(lua_State *L) {
+static int tablib_resize(lua_State *L) {
   luaL_checktype(L, 1, LUA_TTABLE);
   Table* t = hvalue(luaA_index2value(L, 1));
   int32_t size = (int32_t)luaL_checkinteger(L, 2);
-  luaH_setlocksize(L, t, size);
+  luaH_resize(L, t, size);
   return 0;
-}
-
-static int tablib_getlocksize(lua_State *L) {
-  luaL_checktype(L, 1, LUA_TTABLE);
-  Table* t = hvalue(luaA_index2value(L, 1));
-  int32_t size = luaH_getlocksize(L, t);
-  lua_pushinteger(L, size);
-  return 1;
 }
 
 static const luaL_Reg tab_funcs[] = {
@@ -890,9 +894,7 @@ static const luaL_Reg tab_funcs[] = {
   {"push", tablib_push},
   {"pop", tablib_pop},
   {"trim", tablib_trim},
-  //
-  {"setlocksize", tablib_setlocksize},
-  {"getlocksize", tablib_getlocksize},
+  {"resize", tablib_resize},
   {NULL, NULL}
 };
 
