@@ -554,58 +554,64 @@ int luaV_lessequal (lua_State *L, const TValue *l, const TValue *r) {
   else return lessequalothers(L, l, r);
 }
 
-// 因为nan的存在。情况更加复杂了。
-int luaV_cmpnumber (const TValue *l, const TValue *r) {
-  lua_assert(ttisnumber(l) && ttisnumber(r));
-  // nan == nan and nan < number
-  if(ttisfloat(l) && luai_numisnan(fltvalue(l))){
-    return (ttisfloat(r) && luai_numisnan(fltvalue(r))) ? 0 : -1;
-  }
-  else if((ttisfloat(r) && luai_numisnan(fltvalue(r)))){
-    return 1;
-  }
-  return (nvalue(l) > nvalue(r)) - (nvalue(l) < nvalue(r));
+/*
+比较 int64 和 double。【也许有问题，需要留意下】
+不关心 nan, garbage in garbage out.
 
-  // 下面的代码也保留吧。头大
-  // if (ttisinteger(l)) {
-  //   if (ttisinteger(r)) {
-  //     lua_Integer a = ivalue(l);
-  //     lua_Integer b = ivalue(r);
-  //     // https://stackoverflow.com/questions/14579920/fast-sign-of-integer-in-c
-  //     return (a > b) - (a < b);
-  //   }
-  //   else {
-  //     lua_Number b = fltvalue(r);
-  //     if (luai_numisnan(b)){
-  //       return 1;
-  //     }
-  //     lua_Integer a = ivalue(l);
-  //     return (a > b) - (a < b);
-  //   }
-  // }
-  // else {
-  //   lua_Number a = fltvalue(l);
-  //   if (ttisinteger(r)) {
-  //     if (luai_numisnan(a)){
-  //       return -1;
-  //     }
-  //     lua_Integer b = ivalue(r);
-  //     return (a > b) - (a < b);
-  //   }
-  //   else {
-  //     lua_Number b = fltvalue(r);
-  //     if (luai_numisnan(a)){
-  //       return luai_numisnan(b) ? 0 : -1;
-  //     }
-  //     else if(luai_numisnan(b)){
-  //       return 1;
-  //     }
-  //     return (a > b) - (a < b);
-  //   }
-  // }
+参考资料
+> https://stackoverflow.com/questions/58734034/how-to-properly-compare-an-integer-and-a-floating-point-value
+> https://quick-bench.com/q/hDoWbL-7iSeUMELZMTfJXLq0eDg
+*/
+inline static int luaV_cmp_int_float(int64_t i, double f) {
+  int64_t i_lo = i & 0x00000000FFFFFFFF;    // Extract lower 32 bits.
+  int64_t i_hi = i & 0xFFFFFFFF00000000;    // Extract upper 32 bits.
+  double x_lo = (double)i_lo;               // Exact conversion to double, no rounding errors!
+  double x_hi = (double)i_hi;               // 
+  double left = f - x_hi;                   // If i is close to y then y - x_hi is exact,
+  if (x_lo > left) return 1;
+  if (x_lo < left) return -1;
+  return 0;// NaN always return 0
 }
 
-// 自定义的比较函数。不去调用元表之类的。不过也是很头大。
+/*
+数字比较，返回 <0,0,>0
+
+1. 无视nan，garbage in garbage out
+
+https://stackoverflow.com/questions/14579920/fast-sign-of-integer-in-c
+说到一个技巧 sign(x) = (x>0)-(x<0)
+
+PS: 之前用了类似 ((b1?int64:double) < (b2?int64:double)) 的方法来实现，发现是有漏洞了。
+会统一当成double来处理。并且单独 int64 < double，也是会转换一次的。
+*/
+int luaV_cmpnumber (const TValue *l, const TValue *r) {
+  lua_assert(ttisnumber(l) && ttisnumber(r));
+  if (ttisinteger(l)) {
+    int64_t ll = ivalue(l);
+    if (ttisinteger(r)) {
+      int64_t rr = ivalue(r);
+      return (ll>rr) - (ll<rr); 
+    }
+    else {
+      double rr = fltvalue(r);
+      return luaV_cmp_int_float(ll, rr);
+    }
+  }
+  else {
+    double ll = fltvalue(l);
+    if (ttisinteger(r)) {
+      int64_t rr = ivalue(r);
+      return - luaV_cmp_int_float(rr, ll);
+    }
+    else {
+      double rr = fltvalue(r);
+      return (ll>rr) - (ll<rr); 
+    }
+  }
+}
+
+// 自定义的比较函数。【不去调用元表之类的。这样它就像是原子的一样，方便tablib做优化】
+// 之所这么做，是感觉元表的 __le 是个残废，不可信，会抛异常。
 int luaV_cmpobj_safe (const TValue *l, const TValue *r) {
   int t1 = ttype(l),t2 = ttype(r);
   if(t1 != t2){

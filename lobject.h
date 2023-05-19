@@ -698,7 +698,7 @@ typedef union Node {
   struct NodeKey {
     TValuefields;  /* fields for value */
     lu_byte key_tt;  /* key type */
-    int next;  /* for chaining */
+    int32_t next;  /* for chaining */ /* stable_sort 特殊优化时 add@om */
     Value key_val;  /* key value */
   } u;
   TValue i_val;  /* direct access to node's value as a proper 'TValue' */

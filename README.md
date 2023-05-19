@@ -75,6 +75,8 @@ opt1
 */
 ```
 
+特别的是：比较函数返回 `<0, 0, >0`，和 sort是不一样的。
+
 ## mylua table api
 mylua 把 table 分成了纯粹的 map,array 两个结构。默认是 map。
 提供一些API

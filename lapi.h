@@ -61,6 +61,6 @@ lua 没有暴露 TValue 之类的给 外部，甚至都不暴露给内置的库�
 */
 LUAI_FUNC TValue* luaA_index2value(lua_State *L, int idx);
 
-LUAI_FUNC void luaA_pushvalue(lua_State *L, TValue* v);
+LUAI_FUNC void luaA_pushvalue(lua_State *L, const TValue* v);
 
 #endif

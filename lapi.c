@@ -91,7 +91,7 @@ TValue *luaA_index2value (lua_State *L, int idx) {
     return index2value(L, idx);
 }
 
-void luaA_pushvalue(lua_State *L, TValue* v){
+void luaA_pushvalue(lua_State *L,const TValue* v){
   lua_lock(L);
   setobj2s(L, L->top, v);
   api_incr_top(L);
@@ -814,7 +814,7 @@ LUA_API void  (lua_table_resize) (lua_State *L, int idx, int32_t size) {
   int res = 0;
   lua_lock(L);
   obj = index2value(L, idx);
-  api_check(L, ttistable(o), "table expect");
+  api_check(L, ttistable(obj), "table expect");
   t = hvalue(obj);
   luaH_resize(L, t, size);
   lua_unlock(L);

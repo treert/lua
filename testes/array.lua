@@ -26,11 +26,11 @@ end)
 print(msg)
 assert(not ok and string.find(msg, "array"))
 ok,msg = pcall(function ()
-    -- doc@om 要非常小心呐，2^30 目前不会报错。但是吃掉了 16G 的内存
+    -- 以前可以 arr[2^30] = 1，不过会直接吃掉16G内存。现在不行了。只能一个个加，除非用resize
     arr[2^30+1] = 1
 end)
 print(msg)
-assert(not ok and string.find(msg, "array"))
+assert(not ok and string.find(msg, "table.resize"))
 
 local a = table.newmap(100)
 assert(#a == 0 and table.get_capacity(a) >= 100)
@@ -84,6 +84,8 @@ assert(t.m == 'mm')
 
 print("test stable_sort")
 local a = [1,nil,3,2]
+-- a = [1,4,2,3]
+-- a = [4,3]
 table.stable_sort(a)
 assert(a[2] == 2 and a[4] == nil and #a == 4)
 table.shrink(a)
@@ -93,25 +95,29 @@ local a = {a1=1,a22=2,a333=333, 11,22,-33}
 table.stable_sort(a)
 local idx,k,v = table.next(a)
 assert(idx == 1 and k == 3 and v == -33)
-
+print("111")
+for k,v in a do print(k,v) end
 table.stable_sort(a, function (k,v)
     return -v
 end, 3)
+print("1122")
 local idx,k,v = table.next(a)
 assert(idx == 1 and k == 'a333' and v == 333)
-
+print("222")
 table.stable_sort(a, function (k,v)
     return -v
 end, -3)
 local idx,k,v = table.next(a)
 assert(idx == 1 and k == 3 and v == -33)
 
-pcall(function ()
+local ok,msg = pcall(function ()
     table.stable_sort(a, function (k,v)
         error("hahaha")
         return -v
     end, 3)
 end)
+print(msg)
+assert(not ok)
 local idx,k,v = table.next(a)
 assert(idx == 1 and k == 3 and v == -33) -- 有错误保持不变
 
