@@ -290,6 +290,9 @@ typedef struct GCObject {
 
 #define gcvalueraw(v)	((v).gc)
 
+#define ptrvalueraw(v)  ((v).p)
+#define ptrvalue(o)     (val_(o).p)
+
 #define setgcovalue(L,obj,x) \
   { TValue *io = (obj); GCObject *i_g=(x); \
     val_(io).gc = i_g; settt_(io, ctb(i_g->tt)); }

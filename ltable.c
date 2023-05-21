@@ -47,7 +47,7 @@ HashTable 的实现算法来自 dotnet。和 lua 自带的有很大差别，是�
 
 /// Hash Function For Data
 // lua float 来自 dotnet 的实现
-inline static int32_t gethash_double(double number){
+inline static uint32_t gethash_double(double number){
   int64_t num = *(int64_t*)(&number);
   // Optimized check for IsNan() || IsZero()
   if (((num - 1) & 0x7FFFFFFFFFFFFFFFL) >= 9218868437227405312L)
@@ -59,97 +59,111 @@ inline static int32_t gethash_double(double number){
 }
 
 // lua integer
-inline static int32_t gethash_int64(int64_t num){
+inline static uint32_t gethash_int64(int64_t num){
   return (int32_t)num ^ (int32_t)(num >> 32);
 }
 
-inline static int32_t gethash_ptr(void* ptr){
+inline static uint32_t gethash_ptr(void* ptr){
   return (int32_t)(intptr_t)ptr;// dotnet的实现方法就是这样直接截断
 }
-
-// generic hash function
-static int32_t gethash(const TValue *key) {
-  switch (ttypetag(key)) {
-    case LUA_VNUMINT: {
-      lua_Integer i = ivalue(key);
-      return gethash_int64(i);
-    }
-    case LUA_VNUMFLT: {
-      lua_Number n = fltvalue(key);
-      return gethash_double(n);
-    }
-    case LUA_VSHRSTR: {
-      TString *ts = tsvalue(key);
-      return ts->hash;
-    }
-    case LUA_VLNGSTR: {
-      TString *ts = tsvalue(key);
-      return luaS_hashlongstr(ts);
-    }
-    case LUA_VFALSE:
-      return 0;
-    case LUA_VTRUE:
-      return 1;
-    case LUA_VLIGHTUSERDATA: {
-      void *p = pvalue(key);
-      return gethash_ptr(p);
-    }
-    case LUA_VLCF: {
-      lua_CFunction f = fvalue(key);
-      return gethash_ptr((void*)f);
-    }
-    default: {
-      GCObject *o = gcvalue(key);
-      return gethash_ptr(o);
-    }
-  }
-}
-
-/// Size And Prime
-static const uint32_t s_primes[MAX_LOG_SIZE + 1] = {
-    1,3,5,11,19,41,79,157,317,631,1259,2521,5039,10079,20161,40343,80611,161221,322459,644881,1289749,2579513,5158999,10317991,20635981,41271991,82543913,165087817,330175613,660351239,1320702451
-};
-static const uint64_t s_primes_fastmod_multiplier[MAX_LOG_SIZE + 1] = {
-    0,6148914691236517206ull,3689348814741910324ull,1676976733973595602ull,970881267037344822ull,449920587163647601ull,233503089540627236ull,117495185182863387ull,58191621683626346ull,29234142747558719ull,14651901567680343ull,7317232873347700ull,3660794616731406ull,1830215703314769ull,914971681648210ull,457247702791304ull,228836561681527ull,114418990539133ull,57206479191803ull,28604880704672ull,14302584513506ull,7151250671623ull,3575644049110ull,1787823237461ull,893911662049ull,446955516969ull,223477945294ull,111738978739ull,55869492923ull,27934745912ull,13967373242ull,
-};
-
-/// <summary>Performs a mod operation using the multiplier pre-computed.</summary>
-/// <remarks>This should only be used on 64-bit.</remarks>
-inline static uint32_t helper_FastMod(uint32_t value, uint32_t divisor, uint64_t multiplier)
-{
-  uint32_t highbits = (uint32_t)(((((multiplier * value) >> 32) + 1) * divisor) >> 32);
-  return highbits;
-}
-
-// 通过 hash 值计算 bucket index
-inline static uint32_t getbucketidx(uint32_t hash, uint8_t log_size)
-{
-  lua_assert(log_size <= MAX_LOG_SIZE);
-  uint32_t d = s_primes[log_size];
-  uint64_t m = s_primes_fastmod_multiplier[log_size];
-  return helper_FastMod(hash, d, m);
-}
-
-#define getmapindexmemsize(lsize) (sizeof(int32_t)*s_primes[lsize])
-#define getmapmemsize(lsize) (sizeof(Node)*twoto(lsize) + getmapindexmemsize(lsize))
 
 // get bucket index start ptr. bucket index store after node
 #define getbucketstart(t)       ((int32_t*)(get_map_ptr(t) + twoto(t->lsizenode)))
 // get bucket head.
 #define getbucket(t,idx)        (getbucketstart(t) + (idx))
-#define getbucketbyhash(t,hash) (getbucketstart(t) + getbucketidx(hash,t->lsizenode))
+// #define getbucketbyhash(t,hash) (getbucketstart(t) + getbucketidx(hash,t->lsizenode))
+// #define getbucketbyhash(t,hash) (getbucketstart(t) + helper_FastMod(hash,t->capacity, t->fastmoder))
+// #define getbucketbyhash(t,hash) (getbucketstart(t) + hash%t->capacity)
+#define getbucketbyhash(t,hash)         (getbucketstart(t) + (hash%((twoto(t->lsizenode)-1)|1)))
+#define getbucketbyhash_pow2(t, hash)   (getbucketstart(t) + (hash&(twoto(t->lsizenode)-1)))
 
+#define getbucket_byint(t,num)    getbucketbyhash(t, gethash_int64(num))
+#define getbucket_byflt(t,flt)    getbucketbyhash(t, gethash_double(flt))
+#define getbucket_bystr(t,str)    getbucketbyhash_pow2(t, (str)->hash)
+
+// generic hash function
+static int32_t* getbucket_generic(Table *t, const TValue *key) {
+  switch (ttypetag(key)) {
+    case LUA_VNUMINT: {
+      return getbucket_byint(t, ivalue(key));
+    }
+    case LUA_VNUMFLT: {
+      return getbucket_byflt(t, fltvalue(key));
+    }
+    case LUA_VSHRSTR: {
+      return getbucket_bystr(t, tsvalue(key));
+    }
+    case LUA_VLNGSTR: {
+      int32_t hash = luaS_hashlongstr(tsvalue(key));
+      return getbucketbyhash_pow2(t, hash);
+    }
+    case LUA_VFALSE:
+      return getbucketbyhash_pow2(t, 0);
+    case LUA_VTRUE:
+      return getbucketbyhash_pow2(t, 1);
+    // case LUA_VLIGHTUSERDATA: {
+    //   void *p = pvalue(key);
+    //   return gethash_ptr(p);
+    // }
+    // case LUA_VLCF: {
+    //   lua_CFunction f = fvalue(key);
+    //   return gethash_ptr((void*)f);
+    // }
+    default: {
+      void *ptr = ptrvalue(key);
+      uint32_t hash = gethash_ptr(ptr);
+      return getbucketbyhash(t, hash);
+    }
+  }
+}
+
+/// Size And Prime
+// static const uint32_t s_primes[MAX_LOG_SIZE + 1] = {
+//     1,3,5,11,19,41,79,157,317,631,1259,2521,5039,10079,20161,40343,80611,161221,322459,644881,1289749,2579513,5158999,10317991,20635981,41271991,82543913,165087817,330175613,660351239,1320702451
+// };
+// static const uint64_t s_primes_fastmod_multiplier[MAX_LOG_SIZE + 1] = {
+//     0,6148914691236517206ull,3689348814741910324ull,1676976733973595602ull,970881267037344822ull,449920587163647601ull,233503089540627236ull,117495185182863387ull,58191621683626346ull,29234142747558719ull,14651901567680343ull,7317232873347700ull,3660794616731406ull,1830215703314769ull,914971681648210ull,457247702791304ull,228836561681527ull,114418990539133ull,57206479191803ull,28604880704672ull,14302584513506ull,7151250671623ull,3575644049110ull,1787823237461ull,893911662049ull,446955516969ull,223477945294ull,111738978739ull,55869492923ull,27934745912ull,13967373242ull,
+// };
+
+/// <summary>Performs a mod operation using the multiplier pre-computed.</summary>
+/// <remarks>This should only be used on 64-bit.</remarks>
+// inline static uint32_t helper_FastMod(uint32_t value, uint32_t divisor, uint64_t multiplier)
+// {
+//   uint32_t highbits = (uint32_t)(((((multiplier * value) >> 32) + 1) * divisor) >> 32);
+//   return highbits;
+// }
+
+// // 通过 hash 值计算 bucket index
+// inline static uint32_t getbucketidx(uint32_t hash, uint8_t log_size)
+// {
+//   lua_assert(log_size <= MAX_LOG_SIZE);
+//   uint32_t d = s_primes[log_size];
+//   uint64_t m = s_primes_fastmod_multiplier[log_size];
+//   return helper_FastMod(hash, d, m);
+// }
+
+// #define getmapindexmemsize(lsize) (sizeof(int32_t)*s_primes[lsize])
+// #define getmapmemsize(lsize) (sizeof(Node)*twoto(lsize) + getmapindexmemsize(lsize))
+// // for array
+// #define getarraymemsize(lsize) (sizeof(TValue)*twoto(lsize))
+
+#define getmapindexmemsize(lsize) (sizeof(int32_t)*twoto(lsize))
+#define getmapmemsize(lsize) (sizeof(Node)*twoto(lsize) + getmapindexmemsize(lsize))
 // for array
 #define getarraymemsize(lsize) (sizeof(TValue)*twoto(lsize))
 
-
-#define dummynode		(&dummynode_)
-
-static const Node dummynode_ = {
-  {{NULL}, LUA_VEMPTY,  /* value's value and type */
+static const Node dummynode_[2] = {
+  {
+  {{NULL}, LUA_VNIL,  /* value's value and type */
    LUA_VNIL, 0, {NULL}}  /* key type, next, and key value */
+  },
+  {
+    .i_val = {.value_={.i=-1},-1}
+  }
 };
 
+#define dummynode		((void*)(&dummynode_))
+#define isdummy(t)  ((t)->data == dummynode)
 
 static const TValue absentkey = {ABSTKEYCONSTANT};
 
@@ -171,84 +185,78 @@ static int equalkey (const TValue *k1, const Node *n2) {
       return (ivalue(k1) == keyival(n2));
     case LUA_VNUMFLT:
       return luai_numeq(fltvalue(k1), fltvalueraw(keyval(n2)));
-    case LUA_VLIGHTUSERDATA:
-      return pvalue(k1) == pvalueraw(keyval(n2));
-    case LUA_VLCF:
-      return fvalue(k1) == fvalueraw(keyval(n2));
+    // case LUA_VLIGHTUSERDATA:
+    //   return pvalue(k1) == pvalueraw(keyval(n2));
+    // case LUA_VLCF:
+    //   return fvalue(k1) == fvalueraw(keyval(n2));
     case ctb(LUA_VLNGSTR):
       return luaS_eqlngstr(tsvalue(k1), keystrval(n2));
     default:
-      return gcvalue(k1) == gcvalueraw(keyval(n2));
+      return ptrvalue(k1) == ptrvalueraw(keyval(n2));
+      // return gcvalue(k1) == gcvalueraw(keyval(n2));
   }
 }
 
 /*
 ** Search function for integers.
 */
-static Node* getint_node (Table *t, lua_Integer key) {
+static const TValue* getint_node (Table *t, lua_Integer key) {
   lua_assert(get_map_ptr(t) != NULL);
-  Node* nodes = get_map_ptr(t);
-  uint32_t hash = gethash_int64(key);
-  int32_t* bucket = getbucketbyhash(t, hash);
+  int32_t* bucket = getbucket_byint(t, key);
   int32_t nx = *bucket;
   while(nx >= 0){
-    Node* n = nodes + nx;
+    Node* n = gnode(t,nx);
     if (keyisinteger(n) && keyival(n) == key){
-      return n;
+      return gval(n);
     }
     else{
       nx = gnext(n);
     }
   }
-  return NULL;
+  return &absentkey;
 }
 
 
 /*
 ** search function for short strings
 */
-static Node* getshortstr_node (Table *t, TString *key) {
+static const TValue* getshortstr_node (Table *t, TString *key) {
   lua_assert(get_map_ptr(t) != NULL);
-  Node* nodes = get_map_ptr(t);
-  uint32_t hash = key->hash;
-  int* bucket = getbucketbyhash(t, hash);
+  int* bucket = getbucket_bystr(t, key);
   int nx = *bucket;
   while(nx >= 0){
-    Node* n = nodes + nx;
+    Node* n = gnode(t,nx);
     if (keyisshrstr(n) && eqshrstr(keystrval(n), key)){
-      return n;
+      return gval(n);
     }
     else{
       nx = gnext(n);
     }
   }
-  return NULL;
+  return &absentkey;
 }
 
 /*
 ** "Generic" get version.
 */
-static Node* getgeneric_node(Table *t, const TValue *key) {
+static const TValue* getgeneric_node(Table *t, const TValue *key) {
   lua_assert(get_map_ptr(t) != NULL);
   lua_assert(!ttisnil(key));
-  Node* nodes = get_map_ptr(t);
-  uint32_t hash = gethash(key);
-  int32_t* bucket = getbucketbyhash(t, hash);
+  int32_t* bucket = getbucket_generic(t, key);
   int32_t nx = *bucket;
   while(nx >= 0){
-    Node* n = nodes + nx;
+    Node* n = gnode(t,nx);
     if (equalkey(key, n)){
-      return n;
+      return gval(n);
     }
     else{
       nx = gnext(n);
     }
   }
-  return NULL;
+  return &absentkey;
 }
 
 int luaH_next (lua_State *L, Table *t, StkId key) {
-  if(table_count(t) == 0) return 0;
   // doc@om 发现个问题。float 类型的 1.0 也会不支持，不过不打算做什么。
   if(table_isarray(t)){
     // for array
@@ -272,12 +280,12 @@ int luaH_next (lua_State *L, Table *t, StkId key) {
   // for map
   Node* node;
   if (!ttisnil(s2v(key))){
-    node = getgeneric_node(t, s2v(key));
-    if (l_unlikely(node == NULL)){
+    const TValue* val = getgeneric_node(t, s2v(key));
+    if (l_unlikely(isabstkey(val))){
       luaG_runerror(L, "invalid key to 'next'");  /* key not found */ // 兼容 lua
       return 0;
     }
-    node ++;
+    node = nodefromval(val) + 1;
   }
   else{
     node = gnode(t, 0);// 开始遍历
@@ -327,8 +335,7 @@ static void rehash_map(Table *t){
     if(!isempty(gval(n))){
       TValue key;
       getnodekey(L, &key, n);
-      uint32_t hash = gethash(&key);
-      int32_t* bucket = getbucketbyhash(t, hash);
+      int32_t* bucket = getbucket_generic(t, &key);
       gnext(n) = *bucket;
       *bucket = i;
     }
@@ -337,7 +344,7 @@ static void rehash_map(Table *t){
 
 // 重新选择数组的内存大小。【只会减小内存】
 static void resize_table_mem(lua_State *L, Table *t, int need_rehash_map){
-  if (t->data == NULL) return;// 不可能再减少了
+  if (isdummy(t)) return;// 不可能再减少了
   
   if (t->count > 0) {
     int lsize = luaO_ceillog2(t->count);// 肯定有效的
@@ -350,11 +357,9 @@ static void resize_table_mem(lua_State *L, Table *t, int need_rehash_map){
     t->lsizenode = lsize;
   }
   else {
-    size_t new_sz = 0;
     size_t old_sz = table_isarray(t) ? getarraymemsize(t->lsizenode): getmapmemsize(t->lsizenode);
-    t->data = luaM_realloc(L, t->data, old_sz, new_sz);
-    lua_assert(t->data == NULL);
-    t->data = NULL;// 防止出现bug。release 模式下，编译器会优化吧。
+    luaM_freemem(L, t->data, old_sz);
+    t->data = dummynode;
     t->lsizenode = 0;// no need
   }
   
@@ -374,23 +379,35 @@ void luaH_addsize (lua_State *L, Table *t, int32_t addsize){
   if(lsize > MAX_LOG_SIZE){
     luaG_runerror(L, "table overflow");
   }
-  if(t->data != NULL){
+  if(!isdummy(t)){
     if(lsize <= t->lsizenode) return;// 容量足够
   }
   // for array
   if (table_isarray(t)){
-    size_t oldsize = t->data == NULL ? 0: getarraymemsize(t->lsizenode);
-    size_t newsize = getarraymemsize(lsize);
-    t->data = luaM_realloc(L, t->data, oldsize, newsize);
+    if (isdummy(t)) {
+      size_t newsize = getarraymemsize(lsize);
+      t->data = luaM_realloc(L, NULL, 0, newsize);
+    }
+    else {
+      size_t oldsize = getarraymemsize(t->lsizenode);
+      size_t newsize = getarraymemsize(lsize);
+      t->data = luaM_realloc(L, t->data, oldsize, newsize);
+    }
     t->lsizenode = lsize;
     // not need fill nil
     return;
   }
   // for map
   int32_t maxcount = table_maxcount(t);
-  size_t oldsize = t->data == NULL ? 0: getmapmemsize(t->lsizenode);
-  size_t newsize = getmapmemsize(lsize);
-  t->data = luaM_realloc(L, t->data, oldsize, newsize);
+  if (isdummy(t)) {
+    size_t newsize = getmapmemsize(lsize);
+    t->data = luaM_realloc(L, NULL, 0, newsize);
+  }
+  else {
+    size_t oldsize = getmapmemsize(t->lsizenode);
+    size_t newsize = getmapmemsize(lsize);
+    t->data = luaM_realloc(L, t->data, oldsize, newsize);
+  }
   t->lsizenode = lsize;
   // rebuild bucket idx. not shrink map. 避免遍历的时候修改数组导致遍历出问题
   rehash_map(t);
@@ -523,7 +540,7 @@ Table *luaH_new (lua_State *L) {
   t->count = 0;
   t->freecount = 0;
   t->freelist = 0;
-  t->data = NULL;  /* lua use common 'dummynode', mylua just set NULL*/
+  t->data = dummynode;  /* lua use common 'dummynode', mylua just set NULL*/
   return t;
 }
 
@@ -536,13 +553,13 @@ Table *luaH_newarray (lua_State *L) {
   t->count = 0;
   t->freecount = 0;
   t->freelist = 0;
-  t->data = NULL;  /* lua use common 'dummynode', mylua just set NULL*/
+  t->data = dummynode;  /* lua use common 'dummynode', mylua just set NULL*/
   return t;
 }
 
 
 void luaH_free (lua_State *L, Table *t) {
-  if (t->data != NULL){
+  if (!isdummy(t)){
     size_t size = table_isarray(t) ? getarraymemsize(t->lsizenode) : getmapmemsize(t->lsizenode);
     luaM_freemem(L, t->data, size);
   }
@@ -553,17 +570,14 @@ void luaH_free (lua_State *L, Table *t) {
 ** Search function for integers.
 */
 const TValue *luaH_getint (Table *t, lua_Integer key) {
-  if(table_isarray(t)){
-    // for array
-    if ( 0 < key && key <= t->count){
-      return get_array_val(t, key-1);
-    }
-    return &absentkey;
+  if (table_ismap(t)) {
+    return getint_node(t, key);
   }
-  // for map
-  if(table_count(t) == 0) return &absentkey;
-  Node* n = getint_node(t, key);
-  return n ? gval(n) : &absentkey;
+  // for array
+  if ( 0 < key && key <= t->count){
+    return get_array_val(t, key-1);
+  }
+  return &absentkey;
 }
 
 
@@ -571,33 +585,25 @@ const TValue *luaH_getint (Table *t, lua_Integer key) {
 ** search function for short strings
 */
 const TValue *luaH_getshortstr (Table *t, TString *key) {
-  if(table_isarray(t)){
-    return &absentkey;
+  if (table_ismap(t)) {
+    return getshortstr_node(t, key);
   }
-  // for map
-  if(table_count(t) == 0) return &absentkey;
-  Node* n = getshortstr_node(t, key);
-  return n ? gval(n) : &absentkey;
+  return &absentkey;
 }
 
 /*
 ** search function for strings
 */
 const TValue *luaH_getstr (Table *t, TString *key) {
-  if(table_isarray(t)){
-    return &absentkey;
+  if (key->tt == LUA_VSHRSTR) {
+    return luaH_getshortstr(t, key);
   }
-  // for map
-  if(table_count(t) == 0) return &absentkey;
-  Node* n;
-  if (key->tt == LUA_VSHRSTR)
-    n = getshortstr_node(t, key);
-  else {  /* for long strings, use generic case */
+  if (table_ismap(t) && t->data) {
     TValue ko;
     setsvalue(cast(lua_State *, NULL), &ko, key);
-    n = getgeneric_node(t, &ko);
+    return getgeneric_node(t, &ko);
   }
-  return n ? gval(n) : &absentkey;
+  return &absentkey;
 }
 
 
@@ -605,43 +611,37 @@ const TValue *luaH_getstr (Table *t, TString *key) {
 ** main search function
 */
 const TValue *luaH_get (Table *t, const TValue *key) {
-  if(table_isarray(t)){
-    lua_Integer idx = 0;
-    if (ttypetag(key) == LUA_VNUMINT) {
-      idx = ivalue(key);
+  if (table_ismap(t)) {
+    switch (ttypetag(key)) {
+      case LUA_VSHRSTR:
+        return getshortstr_node(t, tsvalue(key));
+      case LUA_VNUMINT:
+        return getint_node(t, ivalue(key));
+      case LUA_VNIL: return &absentkey;// throw error?
+      case LUA_VNUMFLT: {
+        lua_Integer k;
+        if (luaV_flttointeger(fltvalue(key), &k, F2Ieq)) /* integral index? */
+        {
+          return getint_node(t, k);/* use specialized version */
+        }
+        /* else... */
+      }  /* FALLTHROUGH */
+      default:
+        return getgeneric_node(t, key);
     }
-    else if (ttypetag(key) == LUA_VNUMFLT) {
-      luaV_flttointeger(fltvalue(key), &idx, F2Ieq); /* integral index? */
-    }
-    if ( 0 < idx && idx <= t->count){
-      return get_array_val(t, idx-1);
-    }
-    return &absentkey;
   }
-  // for map
-  if(table_count(t) == 0) return &absentkey;
-  Node* n;
-  switch (ttypetag(key)) {
-    case LUA_VSHRSTR:
-      n = getshortstr_node(t, tsvalue(key));
-      break;
-    case LUA_VNUMINT:
-      n = getint_node(t, ivalue(key));
-      break;
-    case LUA_VNIL: return &absentkey;// throw error?
-    case LUA_VNUMFLT: {
-      lua_Integer k;
-      if (luaV_flttointeger(fltvalue(key), &k, F2Ieq)) /* integral index? */
-      {
-        n = getint_node(t, k);/* use specialized version */
-        break;
-      }
-      /* else... */
-    }  /* FALLTHROUGH */
-    default:
-      n = getgeneric_node(t, key);
+  // for array
+  lua_Integer idx = 0;
+  if (ttypetag(key) == LUA_VNUMINT) {
+    idx = ivalue(key);
   }
-  return n ? gval(n) : &absentkey;
+  else if (ttypetag(key) == LUA_VNUMFLT) {
+    luaV_flttointeger(fltvalue(key), &idx, F2Ieq); /* integral index? */
+  }
+  if ( 0 < idx && idx <= t->count){
+    return get_array_val(t, idx-1);
+  }
+  return &absentkey;
 }
 
 
@@ -753,8 +753,7 @@ void luaH_newkey (lua_State *L, Table *t, const TValue *key, TValue *value) {
     newnode = nodes + t->count;
     t->count++;
   }
-  uint32_t hash = gethash(key);
-  int32_t* bucket = getbucketbyhash(t, hash);
+  int32_t* bucket = getbucket_generic(t, key);
   gnext(newnode) = *bucket;
   *bucket = (int32_t)(newnode - nodes);
   setnodekey(L, newnode, key);
@@ -771,7 +770,7 @@ void luaH_newarrayitem (lua_State *L, Table *t, lua_Integer idx, TValue *value) 
     return;
   }
   // grow array
-  if (t->data == NULL || newcount > twoto(t->lsizenode)){
+  if (isdummy(t) || newcount > twoto(t->lsizenode)){
     luaH_addsize(L, t, 1);
   }
   t->count = newcount;
@@ -782,12 +781,10 @@ void luaH_newarrayitem (lua_State *L, Table *t, lua_Integer idx, TValue *value) 
 // #define setempty(v)		settt_(v, LUA_VEMPTY)
 
 void luaH_remove (Table *t, Node *node) {
-  lua_assert(t->data != NULL);
+  lua_assert(!isdummy(t));
   TValue key;
-  lua_State *fakeL = NULL;
-  getnodekey(fakeL, &key, node);
-  uint32_t hash = gethash(&key);
-  int32_t* bucket = getbucketbyhash(t, hash);
+  getnodekey(cast(lua_State*,NULL), &key, node);
+  int32_t* bucket = getbucket_generic(t, &key);
   Node* nodes = get_map_ptr(t);
   Node* prenode = NULL;
   int32_t nx = *bucket;

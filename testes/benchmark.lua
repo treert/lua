@@ -1,9 +1,9 @@
 
 
 local opts = {
-    -- test_standard = true,
+    test_standard = true,
     -- test_map_array = true,
-    test_sort = true,
+    -- test_sort = true,
 }
 local loop_count = select(1,...) or 100000000 -- 一亿的耗时在1秒左右。太小了。测试不出什么。
 if (select(2,...) == 'all') then
