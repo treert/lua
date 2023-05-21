@@ -453,8 +453,8 @@ LUA_API lua_Unsigned lua_rawlen (lua_State *L, int idx) {
     case LUA_VSHRSTR: return tsvalue(o)->shrlen;
     case LUA_VLNGSTR: return tsvalue(o)->u.lnglen;
     case LUA_VUSERDATA: return uvalue(o)->len;
-    case LUA_VTABLE: return table_count(hvalue(o));
-    case LUA_VArray: return table_count(hvalue(o));
+    case LUA_VTABLE: return luaH_getn(hvalue(o));
+    case LUA_VArray: return array_count(hvalue(o));
     default: return 0;
   }
 }

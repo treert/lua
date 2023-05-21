@@ -1,8 +1,8 @@
 
 
 local opts = {
-    -- test_standard = true,
-    -- test_map_array = true,
+    test_standard = true,
+    test_map_array = true,
     test_sort = true,
 }
 local loop_count = select(1,...) or 100000000 -- 一亿的耗时在1秒左右。太小了。测试不出什么。
@@ -48,7 +48,10 @@ end
 
 function makeob1()
 local self = {data = 0}
-function self:test()  self.data = self.data + 1  end
+function self:test()  
+    self.data = self.data + 1
+    -- return self.data + 1
+end
 return self
 end
 addbenchmark("Standard (solid)", "ob:test()", makeob1())

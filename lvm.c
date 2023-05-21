@@ -826,7 +826,7 @@ void luaV_objlen (lua_State *L, StkId ra, const TValue *rb) {
       Table *h = hvalue(rb);
       tm = fasttm(L, h->metatable, TM_LEN);
       if (tm) break;  /* metamethod? break switch to call it */
-      setivalue(s2v(ra), table_count(h));  /* else primitive len */
+      setivalue(s2v(ra), luaH_getn(h));  /* else primitive len */
       return;
     }
     case LUA_VSHRSTR: {
@@ -1567,7 +1567,7 @@ void luaV_execute (lua_State *L, CallInfo *ci) {
           luaG_runerror(L, "t[] = x only support table");
         }
         const TValue *slot;
-        int c = table_count(hvalue(t)) + 1;
+        int c = (int32_t)luaH_getn(hvalue(t)) + 1;
         TValue *rc = RKC(i);
         if (luaV_fastgeti(L, t, c, slot)) {
           luaV_finishfastset(L, t, slot, rc);
@@ -2058,14 +2058,7 @@ void luaV_execute (lua_State *L, CallInfo *ci) {
         halfProtect(luaF_newtbcupval(L, ra + 3));
         // 特殊支持 for k,v in t do ... end
         if(ttistable(s2v(ra))){
-          Table *t = hvalue(s2v(ra));
-          if (table_count(t) > 0){
-            setivalue(s2v(ra+1), 0);
-          }
-          else{
-            pc += GETARG_Bx(i) + 2;  /* skip the loop */
-            vmbreak;
-          }
+          setivalue(s2v(ra+1), -1);
         }
         pc += GETARG_Bx(i);
         i = *(pc++);  /* go to next instruction */

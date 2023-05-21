@@ -33,19 +33,12 @@ LUAI_FUNC void luaH_newkey (lua_State *L, Table *t, const TValue *key, TValue *v
 LUAI_FUNC void luaH_newarrayitem (lua_State *L, Table *t, lua_Integer idx, TValue *value);
 // should only use this func to delete (key,value)
 LUAI_FUNC void luaH_remove (Table *t, Node *node);
+LUAI_FUNC void luaH_clearkey (Node *n);
+
 
 LUAI_FUNC void luaH_addsize (lua_State *L, Table *t, int32_t addsize);
 LUAI_FUNC void luaH_reserve (lua_State *L, Table *t, int32_t size);
 LUAI_FUNC void luaH_resize (lua_State *L, Table *t, int32_t new_size);
-LUAI_FUNC void luaH_setlocksize (lua_State *L, Table *t, int32_t size);
-LUAI_FUNC int32_t luaH_getlocksize (lua_State *L, Table *t);
-/* 
-   rehash map and remove empty slot OR trim array.**may change t->count**
-   数组允许空洞，所以用 also_for_array 控制。默认不处理数组。
-   1. 压缩掉所有的数组空洞。
-   2. 只压缩掉数组结尾的空洞。
-*/
-LUAI_FUNC void luaH_try_shrink (lua_State *L, Table *t, int also_for_array, int resize_mem, int force_rehash);
 
 LUAI_FUNC void luaH_free (lua_State *L, Table *t);
 

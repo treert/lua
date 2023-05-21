@@ -438,7 +438,9 @@ static void traverseweakvalue (global_State *g, Table *h) {
      worth traversing it now just to check) */
   int hasclears = 0;
   for (n = gnode(h, 0); n < limit; n++) {  /* traverse hash part */
-    if (!isempty(gval(n))) {
+    if (isempty(gval(n)))  /* entry is empty? */
+      luaH_clearkey(n);  /* clear its key */
+    else {
       lua_assert(!keyisnil(n));
       markkey(g, n);
       if (!hasclears && iscleared(g, gcvalueN(gval(n))))  /* a white value? */
@@ -469,14 +471,14 @@ static int traverseephemeron (global_State *g, Table *h, int inv) {
   int hasclears = 0;  /* true if table has white keys */
   int hasww = 0;  /* true if table has entry "white-key -> white-value" */
   int i;
-  int count = table_maxcount(h);
+  int count = table_cap(h);
   /* traverse hash part; if 'inv', traverse descending
      (see 'convergeephemerons') */
   for (i = 0; i < count; i++) {
     Node *n = inv ? gnode(h, count - 1 - i) : gnode(h, i);
-    if(isempty(gval(n))) continue;
-    lua_assert(!keyisnil(n));
-    if (iscleared(g, gckeyN(n))) {  /* key is not marked (yet)? */
+    if (isempty(gval(n)))  /* entry is empty? */
+      luaH_clearkey(n);  /* clear its key */
+    else if (iscleared(g, gckeyN(n))) {  /* key is not marked (yet)? */
       hasclears = 1;  /* table must be cleared */
       if (valiswhite(gval(n)))  /* value not marked yet? */
         hasww = 1;  /* white-white entry */
@@ -502,7 +504,9 @@ static int traverseephemeron (global_State *g, Table *h, int inv) {
 static void traversestrongtable (global_State *g, Table *h) {
   Node *n, *limit = gnodelast(h);
   for (n = gnode(h, 0); n < limit; n++) {  /* traverse hash part */
-    if (!isempty(gval(n))){
+    if (isempty(gval(n)))  /* entry is empty? */
+      luaH_clearkey(n);  /* clear its key */
+    else {
       lua_assert(!keyisnil(n));
       markkey(g, n);
       markvalue(g, gval(n));
@@ -714,10 +718,10 @@ static void clearbykeys (global_State *g, GCObject *l) {
     Node *limit = gnodelast(h);
     Node *n;
     for (n = gnode(h, 0); n < limit; n++) {
-      if (!isempty(gval(n))){
-        if (iscleared(g, gckeyN(n)))  /* unmarked key? */
-          luaH_remove(h, n);
-      }
+      if (iscleared(g, gckeyN(n)))  /* unmarked key? */
+        luaH_remove(h, n);  /* remove entry */
+      if (isempty(gval(n)))  /* is entry empty? */
+        luaH_clearkey(n);  /* clear its key */
     }
   }
 }
@@ -732,10 +736,10 @@ static void clearbyvalues (global_State *g, GCObject *l, GCObject *f) {
     Table *h = gco2t(l);
     Node *n, *limit = gnodelast(h);
     for (n = gnode(h, 0); n < limit; n++) {
-      if (!isempty(gval(n))){
-        if (iscleared(g, gcvalueN(gval(n))))  /* unmarked value? */
-          luaH_remove(h, n);
-      }
+      if (iscleared(g, gcvalueN(gval(n))))  /* unmarked value? */
+        luaH_remove(h, n);  /* remove entry */
+      if (isempty(gval(n)))  /* is entry empty? */
+        luaH_clearkey(n);  /* clear its key */
     }
   }
 }

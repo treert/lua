@@ -52,6 +52,7 @@ typedef union Value {
   lua_CFunction f; /* light C functions */
   lua_Integer i;   /* integer numbers */
   lua_Number n;    /* float numbers */
+  uint32_t hash;  /* LUA_VABSTKEY store hash here */     
 } Value;
 
 
@@ -287,8 +288,11 @@ typedef struct GCObject {
 #define ctb(t)			((t) | BIT_ISCOLLECTABLE)
 
 #define gcvalue(o)	check_exp(iscollectable(o), val_(o).gc)
-
 #define gcvalueraw(v)	((v).gc)
+
+/* 强制获取指针,不在乎类型 */
+#define ptrvalue(o) (val_(o).p)
+#define ptrvalueraw(v) ((v).p)
 
 #define setgcovalue(L,obj,x) \
   { TValue *io = (obj); GCObject *i_g=(x); \
@@ -698,9 +702,25 @@ typedef union Node {
   struct NodeKey {
     TValuefields;  /* fields for value */
     lu_byte key_tt;  /* key type */
-    int32_t next;  /* for chaining */ /* stable_sort 特殊优化时 add@om */
+    int16_t itor_next; /* 下一个遍历位置，UINT16_MAX 表示最后一个。如果hash表太大。Table里会有额外的遍历索引区*/
+    union 
+    {
+      struct
+      {
+        int16_t itor_prev;
+        int16_t shr_next;
+      };
+      int32_t next;  /* for hash chaining */
+    };
     Value key_val;  /* key value */
   } u;
+  struct NodeInfo{
+    int32_t count;// value 不为空的元素个数
+    // int32_t used_count;// key 不为空的元素个数。【deadkey也算非空的】
+    // int32_t first_itoridx;// 第一个元素索引。< 0 没有任何元素 (used_count == 0)
+    // int32_t last_itoridx;// 最后一个元素索引。< 0 没有任何元素
+    union Node * lastfree;// 和 lua 的lastfree用途一致
+  };
   TValue i_val;  /* direct access to node's value as a proper 'TValue' */
 } Node;
 
@@ -727,9 +747,9 @@ typedef union Node {
 // 支持固定的若干种长度，2**lsizenode。【todo@om 应该和 size_t 相匹配，30在32位平台上太大了】
 #define MAX_LOG_SIZE        30
 #define MAX_ARRAY_IDX       ((size_t)1 << MAX_LOG_SIZE)
-#define table_count(t)      ((t)->count - (t)->freecount)
-// 最大的有效长度。map: 包含了空洞在内。array: 等于 table_count
-#define table_maxcount(t)   ((t)->count)
+#define array_count(t)      ((t)->arr_count)
+#define table_cap(t)        ((t)->capacity)
+#define table_maxcount(t)   (table_isarray(t)? (t)->arr_count : (t)->capacity)
 
 // for map
 #define get_map_ptr(t)        ((Node*)(t)->data)
@@ -749,7 +769,7 @@ typedef union Node {
 /*
 ** one after last element in a map
 */
-#define gnodelast(h)      get_map_node(h, (h)->count)
+#define gnodelast(h)      get_map_node(h, (h)->capacity)
 
 /*
 ** table = map | array
@@ -757,13 +777,15 @@ typedef union Node {
 typedef struct Table {
   CommonHeader;
   lu_byte flags;  /* 1<<p means tagmethod(p) is not present */
-  lu_byte lsizenode;  /* log2 of size of capacity */
+  lu_byte lsizenode;  /* log2 of size of capacity. no use now */
+  
+  int32_t capacity; /* Table的容量，如果是map，最好是素数 */
+  union {
+    uint64_t fastmoder; /* pre-computed fast mod multiplier*/
+    int32_t arr_count; /* 数组有效元素个数 */
+  };
 
-  int32_t count;// table_count = count - freecount
-  int32_t freecount;// map: 空洞的数量. array:0,不记录空洞数量，麻烦。
-  int32_t freelist;// map 下的空洞链表头。freecount > 0 时有用. array: 用于锁定数组大小(先这么用着)。
-
-  void *data;// TValue* for array, Node*+int32_t* for map
+  void *data;// for array: TValue*, for map: Node* [MapInfo] [MapItorIdx]
 
   struct Table *metatable;
   GCObject *gclist;
@@ -796,8 +818,9 @@ typedef struct Table {
 ** be found when searched in a special way. ('next' needs that to find
 ** keys removed from a table during a traversal.)
 */
-#define setdeadkey(node)	(keytt(node) = LUA_TDEADKEY)
-#define keyisdead(node)		(keytt(node) == LUA_TDEADKEY)
+#define setdeadkey(node)    (keytt(node) = LUA_TDEADKEY)
+#define keyisdead(node)     (keytt(node) == LUA_TDEADKEY)
+#define deadkeyhash(node)   (keyval(node).hash)
 
 /* }================================================================== */
 

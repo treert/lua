@@ -1,5 +1,16 @@
 [my lua](./doc/mylua.md)
 --------
+## 特殊分支
+最近发现 HashTable 的实现时有讲究了。比如 google 在好几年前的 SwissTable 就有很大优化。
+mylua优化的部分是低频使用的部分，最常用的 get set 反而吃亏。
+好馋高性能版的hashtable呀。
+
+lua 的table 比 mylua 的table 快。改写了一波，性能比mylua高不少，不过还是低于lua。
+lua的这种hash实现方式时比dotnet的快呀。
+不过需要放弃map的有序性。
+
+原本想给lua的table加上排序索引。但是想漏了个细节。实现失败。
+
 ## my lua 的主要修改
 - 修改了 table 的实现。现在 **table = map | array**。map is default，是个支持排序的 HashTable。
 - 增加了一些语法。[增量语法糖](#增量语法糖)
