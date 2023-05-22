@@ -45,7 +45,7 @@ target_compile_definitions ( libluadll PRIVATE _CRT_SECURE_NO_WARNINGS LUA_BUILD
 set_target_properties ( libluadll PROPERTIES OUTPUT_NAME lua54 ) # 名字不能和liblua一样，不然不能调试了。
 
 add_executable ( lua ${SRC_LUA} )
-target_link_libraries ( lua liblua )
+target_link_libraries ( lua libluadll )
 
 add_executable ( luac ${SRC_LUAC} )
 target_link_libraries ( luac liblua )

@@ -49,12 +49,13 @@ HashTable 的实现算法来自 dotnet。和 lua 自带的有很大差别，是�
 // lua float 来自 dotnet 的实现
 inline static uint32_t gethash_double(double number){
   int64_t num = *(int64_t*)(&number);
+  // mylua dont care ablout NaN
   // Optimized check for IsNan() || IsZero()
-  if (((num - 1) & 0x7FFFFFFFFFFFFFFFL) >= 9218868437227405312L)
-  {
-    // Ensure that all NaNs and both zeros have the same hash code
-    num &= 0x7FF0000000000000L;
-  }
+  // if (((num - 1) & 0x7FFFFFFFFFFFFFFFL) >= 9218868437227405312L)
+  // {
+  //   // Ensure that all NaNs and both zeros have the same hash code
+  //   num &= 0x7FF0000000000000L;
+  // }
   return (int32_t)num ^ (int32_t)(num >> 32);
 }
 
@@ -67,14 +68,62 @@ inline static uint32_t gethash_ptr(void* ptr){
   return (int32_t)(intptr_t)ptr;// dotnet的实现方法就是这样直接截断
 }
 
-// get bucket index start ptr. bucket index store after node
-#define getbucketstart(t)       ((int32_t*)(get_map_ptr(t) + twoto(t->lsizenode)))
-// get bucket head.
-#define getbucket(t,idx)        (getbucketstart(t) + (idx))
+// #define my_better_mod(hash,divisor) ((hash) % (divisor))
+// #define my_better_mod(hash,divisor) ((hash) < (uint32_t)(divisor) ? (hash) : (hash) % (uint32_t)(divisor))
+inline static uint32_t my_better_mod(uint32_t hash, uint32_t divisor) {
+  return hash < divisor ? hash : hash % divisor;
+}
+
+#define MYLUA_MAP_USE_PRIME_SIZE 1
+
+#if MYLUA_MAP_USE_PRIME_SIZE
+
+/// Size And Prime
+static const uint32_t s_primes[MAX_LOG_SIZE + 1] = {
+    1,3,5,11,19,41,79,157,317,631,1259,2521,5039,10079,20161,40343,80611,161221,322459,644881,1289749,2579513,5158999,10317991,20635981,41271991,82543913,165087817,330175613,660351239,1320702451
+};
+// static const uint64_t s_primes_fastmod_multiplier[MAX_LOG_SIZE + 1] = {
+//     0,6148914691236517206ull,3689348814741910324ull,1676976733973595602ull,970881267037344822ull,449920587163647601ull,233503089540627236ull,117495185182863387ull,58191621683626346ull,29234142747558719ull,14651901567680343ull,7317232873347700ull,3660794616731406ull,1830215703314769ull,914971681648210ull,457247702791304ull,228836561681527ull,114418990539133ull,57206479191803ull,28604880704672ull,14302584513506ull,7151250671623ull,3575644049110ull,1787823237461ull,893911662049ull,446955516969ull,223477945294ull,111738978739ull,55869492923ull,27934745912ull,13967373242ull,
+// };
+
+/// <summary>Performs a mod operation using the multiplier pre-computed.</summary>
+/// <remarks>This should only be used on 64-bit.</remarks>
+// inline static uint32_t helper_FastMod(uint32_t value, uint32_t divisor, uint64_t multiplier)
+// {
+//   uint32_t highbits = (uint32_t)(((((multiplier * value) >> 32) + 1) * divisor) >> 32);
+//   return highbits;
+// }
+
+// // 通过 hash 值计算 bucket index
+// inline static uint32_t getbucketidx(uint32_t hash, uint8_t log_size)
+// {
+//   lua_assert(log_size <= MAX_LOG_SIZE);
+//   uint32_t d = s_primes[log_size];
+//   uint64_t m = s_primes_fastmod_multiplier[log_size];
+//   return helper_FastMod(hash, d, m);
+// }
+
+#define getmapindexmemsize(lsize) (sizeof(int32_t)*s_primes[lsize])
+
 // #define getbucketbyhash(t,hash) (getbucketstart(t) + getbucketidx(hash,t->lsizenode))
 // #define getbucketbyhash(t,hash) (getbucketstart(t) + helper_FastMod(hash,t->capacity, t->fastmoder))
 // #define getbucketbyhash(t,hash) (getbucketstart(t) + hash%t->capacity)
-#define getbucketbyhash(t,hash)         (getbucketstart(t) + (hash%((twoto(t->lsizenode)-1)|1)))
+#define getbucketbyhash(t,hash)         (getbucketstart(t) + my_better_mod(hash,s_primes[t->lsizenode]))
+
+#else /* MYLUA_MAP_USE_PRIME_SIZE */
+
+#define getmapindexmemsize(lsize) (sizeof(int32_t)*twoto(lsize))
+
+#define getbucketbyhash(t,hash)         (getbucketstart(t) + my_better_mod(hash,((twoto(t->lsizenode)-1)|1)))
+
+#endif /* MYLUA_MAP_USE_PRIME_SIZE */
+
+#define getmapmemsize(lsize) (sizeof(Node)*twoto(lsize) + getmapindexmemsize(lsize))
+#define getarraymemsize(lsize) (sizeof(TValue)*twoto(lsize))
+
+// get bucket index start ptr. bucket index store after node
+#define getbucketstart(t)       ((int32_t*)(get_map_ptr(t) + twoto(t->lsizenode)))
+
 #define getbucketbyhash_pow2(t, hash)   (getbucketstart(t) + (hash&(twoto(t->lsizenode)-1)))
 
 #define getbucket_byint(t,num)    getbucketbyhash(t, gethash_int64(num))
@@ -117,41 +166,6 @@ static int32_t* getbucket_generic(Table *t, const TValue *key) {
   }
 }
 
-/// Size And Prime
-// static const uint32_t s_primes[MAX_LOG_SIZE + 1] = {
-//     1,3,5,11,19,41,79,157,317,631,1259,2521,5039,10079,20161,40343,80611,161221,322459,644881,1289749,2579513,5158999,10317991,20635981,41271991,82543913,165087817,330175613,660351239,1320702451
-// };
-// static const uint64_t s_primes_fastmod_multiplier[MAX_LOG_SIZE + 1] = {
-//     0,6148914691236517206ull,3689348814741910324ull,1676976733973595602ull,970881267037344822ull,449920587163647601ull,233503089540627236ull,117495185182863387ull,58191621683626346ull,29234142747558719ull,14651901567680343ull,7317232873347700ull,3660794616731406ull,1830215703314769ull,914971681648210ull,457247702791304ull,228836561681527ull,114418990539133ull,57206479191803ull,28604880704672ull,14302584513506ull,7151250671623ull,3575644049110ull,1787823237461ull,893911662049ull,446955516969ull,223477945294ull,111738978739ull,55869492923ull,27934745912ull,13967373242ull,
-// };
-
-/// <summary>Performs a mod operation using the multiplier pre-computed.</summary>
-/// <remarks>This should only be used on 64-bit.</remarks>
-// inline static uint32_t helper_FastMod(uint32_t value, uint32_t divisor, uint64_t multiplier)
-// {
-//   uint32_t highbits = (uint32_t)(((((multiplier * value) >> 32) + 1) * divisor) >> 32);
-//   return highbits;
-// }
-
-// // 通过 hash 值计算 bucket index
-// inline static uint32_t getbucketidx(uint32_t hash, uint8_t log_size)
-// {
-//   lua_assert(log_size <= MAX_LOG_SIZE);
-//   uint32_t d = s_primes[log_size];
-//   uint64_t m = s_primes_fastmod_multiplier[log_size];
-//   return helper_FastMod(hash, d, m);
-// }
-
-// #define getmapindexmemsize(lsize) (sizeof(int32_t)*s_primes[lsize])
-// #define getmapmemsize(lsize) (sizeof(Node)*twoto(lsize) + getmapindexmemsize(lsize))
-// // for array
-// #define getarraymemsize(lsize) (sizeof(TValue)*twoto(lsize))
-
-#define getmapindexmemsize(lsize) (sizeof(int32_t)*twoto(lsize))
-#define getmapmemsize(lsize) (sizeof(Node)*twoto(lsize) + getmapindexmemsize(lsize))
-// for array
-#define getarraymemsize(lsize) (sizeof(TValue)*twoto(lsize))
-
 static const Node dummynode_[2] = {
   {
   {{NULL}, LUA_VNIL,  /* value's value and type */
@@ -162,7 +176,7 @@ static const Node dummynode_[2] = {
   }
 };
 
-#define dummynode		((void*)(&dummynode_))
+#define dummynode		((void*)(&dummynode_[0]))
 #define isdummy(t)  ((t)->data == dummynode)
 
 static const TValue absentkey = {ABSTKEYCONSTANT};
@@ -328,6 +342,7 @@ int32_t luaH_itor_next (lua_State *L, Table *t, int32_t itor_idx, StkId ret_idx)
 
 static void rehash_map(Table *t){
   lua_assert(table_ismap(t));
+  if (isdummy(t)) return;
   lua_State*L = NULL;
   memset(getbucketstart(t),-1,getmapindexmemsize(t->lsizenode));
   for (int32_t i = 0; i < table_maxcount(t); i++) {
@@ -745,7 +760,7 @@ void luaH_newkey (lua_State *L, Table *t, const TValue *key, TValue *value) {
     t->freecount--;
   }
   else {
-    if(nodes == NULL || t->count == twoto(t->lsizenode)){
+    if(isdummy(t) || t->count == twoto(t->lsizenode)){
       // grow hash
       luaH_addsize(L, t, 1);
       nodes = get_map_ptr(t);

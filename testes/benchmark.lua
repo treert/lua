@@ -1,7 +1,8 @@
 
 
 local opts = {
-    test_standard = true,
+    -- test_standard = true,
+    test_string_get_set = true;
     -- test_map_array = true,
     -- test_sort = true,
 }
@@ -78,11 +79,15 @@ return public
 end
 addbenchmark("Object using closures (noself)", "ob.test()", makeob4())
 
-addbenchmark("Direct Access", "ob.data = ob.data + 1", makeob1())
-
 addbenchmark("Local Variable", "ob = ob + 1", 0)
 
 if opts.test_standard then
+    runbenchmarks(loop_count)
+end
+
+clearbenchmark()
+addbenchmark("Direct Access", "ob.data = ob.data + 1", makeob1())
+if opts.test_string_get_set then
     runbenchmarks(loop_count)
 end
 
