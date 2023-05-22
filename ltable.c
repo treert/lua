@@ -174,7 +174,7 @@ static const Node dummynode_[2] = {
    LUA_VNIL, 0, {NULL}}  /* key type, next, and key value */
   },
   {
-    .i_val = {.value_={.i=-1},-1}
+    .i_val = {.value_={.i=-1},0}
   }
 };
 

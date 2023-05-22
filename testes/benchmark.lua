@@ -1,13 +1,13 @@
 
 
 local opts = {
-    -- test_standard = true,
-    -- test_string_get_set = true;
-    -- test_table = true,
+    test_standard = true,
+    test_string_get_set = true;
+    test_table = true,
     test_map_array = true,
-    -- test_sort = true,
+    test_sort = true,
 }
-local loop_count = select(1,...) or (10^8) -- 10^8 单个耗时在1秒以内。太小了。测试不出什么。
+local loop_count = select(1,...) or (10^7) -- 10^8 单个耗时在1秒以内。太小了。测试不出什么。
 if (select(2,...) == 'all') then
     for key, value in pairs(opts) do
         opts[key] = true
