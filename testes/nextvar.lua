@@ -421,7 +421,7 @@ local function test (a)
   assert(table.remove(a) == nil)
   assert(table.remove(a, #a) == nil)
 end
--- compat@om table是纯hash表。table.insert remove 的行为很不兼容了。想废掉他。以后会有array.insert remove
+-- compat@om table是纯hash表。table.insert remove 的行为很不兼容了。想废掉他。
 --[[
 a = {n=0, [-7] = "ban"}
 test(a)

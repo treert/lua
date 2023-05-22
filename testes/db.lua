@@ -13,14 +13,9 @@ do
 local a=1
 end
 
--- mod@om
-if debug.gethook() then
-    print "debug.gethook() not nil, maybe in debug. skip test db.lua"
-    return
-end
--- assert(not debug.gethook())
+assert(not debug.gethook())
 
-local testline = 24         -- line where 'test' is defined
+local testline = 19         -- line where 'test' is defined
 function test (s, l, p)     -- this must be line 19
   collectgarbage()   -- avoid gc during trace
   local function f (event, line)
@@ -267,23 +262,23 @@ assert(not debug.getlocal(print, 1))
 local function foo () return (debug.getlocal(1, -1)) end
 assert(not foo(10))
 
--- mod@om table.pack was changed. use #t to repalce t.n
+
 -- varargs
 local function foo (a, ...)
   local t = table.pack(...)
-  for i = 1, #t do
+  for i = 1, t.n do
     local n, v = debug.getlocal(1, -i)
     print("mylua")
     print(n,v)
     print(i,t[i])
     assert(n == "(vararg)" and v == t[i])
   end
-  assert(not debug.getlocal(1, -(#t + 1)))
-  assert(not debug.setlocal(1, -(#t + 1), 30))
-  if #t > 0 then
+  assert(not debug.getlocal(1, -(t.n + 1)))
+  assert(not debug.setlocal(1, -(t.n + 1), 30))
+  if t.n > 0 then
     (function (x)
       assert(debug.setlocal(2, -1, x) == "(vararg)")
-      assert(debug.setlocal(2, -#t, x) == "(vararg)")
+      assert(debug.setlocal(2, -t.n, x) == "(vararg)")
      end)(430)
      assert(... == 430)
   end

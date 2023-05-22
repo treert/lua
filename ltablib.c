@@ -201,9 +201,18 @@ static int tpack (lua_State *L) {
   lua_insert(L, 1);  /* put it at index 1 */
   for (i = n; i >= 1; i--)  /* assign elements */
     lua_seti(L, 1, i);
-  // compat@om 不再支持这个了，这个地方就不兼容了
-  // lua_pushinteger(L, n);
-  // lua_setfield(L, 1, "n");  /* t.n = number of elements */ 
+  // compat@om 纯粹为了兼容。 用元表的方式给数组添加 n
+  #ifndef MYLUA_COMPAT_PACK_N
+  #define MYLUA_COMPAT_PACK_N 1
+  #endif
+  #if MYLUA_COMPAT_PACK_N
+  lua_createtable(L, 0, 1); /* create metatable to store n */
+  lua_pushinteger(L, n);
+  lua_setfield(L, -2, "n");  /* mt.n = number of elements */
+  lua_pushvalue(L, -1);  /* copy table */
+  lua_setfield(L, -2, "__index");/* mt.__index = mt */
+  lua_setmetatable(L, -2);
+  #endif
   return 1;  /* return table */
 }
 
@@ -558,6 +567,8 @@ l_sinline int my_cmp_func_call(FSSortContext *co , const TValue *a,const TValue 
   luaA_pushvalue(L, a);
   luaA_pushvalue(L, b);
   lua_call(L, 2, 1);
+  // 之所有这么写。是因为想同时支持 float 和 int.
+  TValue* cmp_ret = luaA_index2value(L, -1);
   int n = (int)luaL_checkinteger(L, -1);
   return n;
 }

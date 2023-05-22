@@ -76,17 +76,17 @@ do   -- length is not an integer
   checkerror("object length is not an integer", table.insert, t, 1)
 end
 
--- compat@om mylua pack 不再添加 n 了
 print "testing pack"
 
 a = table.pack()
-assert(a[1] == undef and #a == 0) 
+assert(a[1] == undef and a.n == 0) 
 
 a = table.pack(table)
-assert(a[1] == table and #a == 1)
+assert(a[1] == table and a.n == 1)
 
 a = table.pack(nil, nil, nil, nil)
-assert(a[1] == nil and #a == 4)
+assert(a[1] == nil and a.n == 4)
+
 
 -- testing move
 do
