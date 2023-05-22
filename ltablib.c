@@ -569,10 +569,13 @@ l_sinline int my_cmp_func_call(FSSortContext *co , const TValue *a,const TValue 
   lua_call(L, 2, 1);
   // 兼容下 table.sort. 平行替换掉 table.sort
   TValue* cmp_ret = luaA_index2value(L, -1);
-  if (ttisnumber(cmp_ret)) {
-    TValue zero;
-    setivalue(&zero, 0);
-    return luaV_cmpnumber(cmp_ret, &zero);
+  if (ttisinteger(cmp_ret)){
+    int64_t i = ivalue(cmp_ret);
+    return (i > 0) - (i < 0);
+  }
+  else if (ttisfloat(cmp_ret)) {
+    double f = fltvalue(cmp_ret);
+    return (f > 0) - (f < 0);
   }
   else {
     return l_isfalse(cmp_ret) ? -1 : 1;
@@ -968,7 +971,6 @@ static const luaL_Reg tab_funcs[] = {
   {"newarray", newarray},
   {"get_capacity", get_capacity},
   {"next", tablib_next},
-
   {"ismap", tablib_ismap},
   {"isarray", tablib_isarray},
   // 这些操作无视元表。

@@ -108,13 +108,15 @@ static const uint32_t s_primes[MAX_LOG_SIZE + 1] = {
 // #define getbucketbyhash(t,hash) (getbucketstart(t) + getbucketidx(hash,t->lsizenode))
 // #define getbucketbyhash(t,hash) (getbucketstart(t) + helper_FastMod(hash,t->capacity, t->fastmoder))
 // #define getbucketbyhash(t,hash) (getbucketstart(t) + hash%t->capacity)
-#define getbucketbyhash(t,hash)         (getbucketstart(t) + my_better_mod(hash,s_primes[t->lsizenode]))
+#define getbucketbyhash(t,hash)         (getbucketstart(t) + (((uint32_t)hash)%s_primes[t->lsizenode]))
+#define getbucketbyhashbetter(t,hash)   (getbucketstart(t) + my_better_mod(hash,s_primes[t->lsizenode]))
 
 #else /* MYLUA_MAP_USE_PRIME_SIZE */
 
 #define getmapindexmemsize(lsize) (sizeof(int32_t)*twoto(lsize))
 
-#define getbucketbyhash(t,hash)         (getbucketstart(t) + my_better_mod(hash,((twoto(t->lsizenode)-1)|1)))
+#define getbucketbyhash(t,hash)         (getbucketstart(t) + (hash)%((twoto(t->lsizenode)-1)|1))
+#define getbucketbyhashbetter(t,hash)   (getbucketstart(t) + my_better_mod(hash,((twoto(t->lsizenode)-1)|1)))
 
 #endif /* MYLUA_MAP_USE_PRIME_SIZE */
 
@@ -126,7 +128,7 @@ static const uint32_t s_primes[MAX_LOG_SIZE + 1] = {
 
 #define getbucketbyhash_pow2(t, hash)   (getbucketstart(t) + (hash&(twoto(t->lsizenode)-1)))
 
-#define getbucket_byint(t,num)    getbucketbyhash(t, gethash_int64(num))
+#define getbucket_byint(t,num)    getbucketbyhashbetter(t, gethash_int64(num))
 #define getbucket_byflt(t,flt)    getbucketbyhash(t, gethash_double(flt))
 #define getbucket_bystr(t,str)    getbucketbyhash_pow2(t, (str)->hash)
 
