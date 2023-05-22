@@ -107,39 +107,39 @@ mylua 把 table 分成了纯粹的 map,array 两个结构。默认是 map。
 - 当前的实现方案，talbe的内存是固定的若干种。倍增分配。
 - array 额外提供的array就是个简单的数组
   - **数组只能从结尾处加元素。**这样使用起来比较安全，**不然`array[2^30]=1`这个代码会分配16G内存！！！**
-  - getset 的性能高出map一倍，性能和lua的table的数组部分相当。
-    - 【不要因为性能选择 array, 按使用需求选择】
+  - 性能略低 lua 的array 一点点。【按理应该几乎一样呀】
+    - 【有些搞不懂，`array[1000]` 差距达到10%】应该都是基本的数值呀.
 
 通过 array + metatable + map, 可以模拟一个 lua 的 table. 不过性能就堪忧了。
 ## mylua 性能测试
-map 的实现多了一层索引。性能差于lua table。大致 多耗时 30%~50%
+map 的实现多了一层索引。性能差于lua table。大致 多耗时 10%
 性能上有利有弊。测试 [benchmark.lua](./testes/benchmark.lua) 结果如下：
-| lua5.4 | mylua  | my/lua  |desc (这里的array还是table,不是mylua的array)
+| lua5.4 | mylua  | my/lua  |desc (使用了 mylua定制的array)
 | -----  | -----  | --------|-
-|1.852   |2.465   |1.33     | Standard (solid)
-|2.254   |3.069   |1.36     | Standard (metatable)
-|1.907   |2.563   |1.34     | Object using closures (PiL 16.4)
-|1.806   |1.75    |0.97     | Object using closures (noself)
-|0.853   |1.213   |1.42     | Direct Access
-|0.296   |0.305   |1.03     | Local Variable
-|3.604   |3.673   |1.02     | table init
-|3.823   |2.043   |0.53     | table forin_and_set
-|9.241   |8.589   |0.93     | array[2] init
-|1.542   |1.929   |1.25     | array[2] reset
-|4.369   |2.423   |0.55     | array[2] forin
-|6.317   |6.049   |0.96     | array[4] init
-|1.035   |1.342   |1.30     | array[4] reset
-|2.904   |1.439   |0.50     | array[4] forin
-|2.943   |3.451   |1.17     | array[20] init
-|0.623   |0.8     |1.28     | array[20] reset
-|1.834   |0.502   |0.27     | array[20] forin
-|1.261   |1.97    |1.56     | array[200] init
-|0.554   |0.735   |1.33     | array[200] reset
-|1.55    |0.308   |0.20     | array[200] forin
-|1.059   |1.744   |1.65     | array[2000] init
-|0.45    |0.678   |1.51     | array[2000] reset
-|1.521   |0.287   |0.19     | array[2000] forin
-|0.966   |0.168   |0.17     | array[2000] sort vs stable_sort
+|1.834   |1.88    |1.03     | Standard (solid)
+|2.132   |2.576   |1.21     | Standard (metatable)
+|1.844   |1.946   |1.06     | Object using closures (PiL 16.4)
+|1.553   |1.546   |1.00     | Object using closures (noself)
+|0.294   |0.29    |0.99     | Local Variable
+|0.76    |0.861   |1.13     | Direct Access
+|2.015   |1.992   |0.99     | table init
+|2.095   |1.04    |0.50     | table forin_and_set
+|10.021  |9.637   |0.96     | array[2] init
+|1.459   |1.616   |1.04     | array[2] reset
+|4.802   |2.632   |0.54     | array[2] forin
+|7.036   |6.385   |0.90     | array[4] init
+|0.97    |1.126   |1.08     | array[4] reset
+|3.284   |1.472   |0.44     | array[4] forin
+|3.367   |2.912   |0.84     | array[20] init
+|0.544   |0.69    |1.08     | array[20] reset
+|2.097   |0.532   |0.25     | array[20] forin
+|1.302   |1.407   |1.04     | array[200] init
+|0.468   |0.589   |1.02     | array[200] reset
+|1.822   |0.322   |0.17     | array[200] forin
+|0.932   |1.303   |1.15     | array[2000] init
+|0.434   |0.596   |1.10     | array[2000] reset
+|1.786   |0.291   |0.16     | array[2000] forin
+|1.066   |0.154   |0.14     | array[2000] sort vs stable_sort
 
 ### 旧的测试数据，包含了 Array 的测试.
 [test-performance](./testes/test-performance.lua) 旧的测试代码. 里面包含的不兼容lua的代码。Array 和 lua 纯粹使用数组差不多。

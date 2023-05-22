@@ -2,11 +2,12 @@
 
 local opts = {
     -- test_standard = true,
-    test_string_get_set = true;
-    -- test_map_array = true,
+    -- test_string_get_set = true;
+    -- test_table = true,
+    test_map_array = true,
     -- test_sort = true,
 }
-local loop_count = select(1,...) or 100000000 -- 一亿的耗时在1秒左右。太小了。测试不出什么。
+local loop_count = select(1,...) or (10^8) -- 10^8 单个耗时在1秒以内。太小了。测试不出什么。
 if (select(2,...) == 'all') then
     for key, value in pairs(opts) do
         opts[key] = true
@@ -120,19 +121,31 @@ clearbenchmark()
 addbenchmark("table init", "ob.init()", make_ob_table())
 addbenchmark("table forin_and_set", "ob.forin_and_set()", make_ob_table())
 
-if opts.test_map_array then
-    runbenchmarks(loop_count/4)
+if opts.test_table then
+    runbenchmarks(loop_count/8)
 end
 
 function make_ob_arr(size)
     size = size or 4
-    local arr = {}
+    local arr
+    if table.newarray then
+        arr = table.newarray()
+    else
+        arr = {}
+    end
     for i = 1, size do
         arr[i] = i
     end
     return {
         init = function ()
-            arr = {}
+            if table.newarray then
+                arr = table.newarray()
+            else
+                arr = {}
+            end
+            
+            -- arr = []
+            -- table.resize(arr, size)
             for i = 1, size do
                 arr[i] = i
             end

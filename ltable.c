@@ -103,7 +103,7 @@ static const uint32_t s_primes[MAX_LOG_SIZE + 1] = {
 //   return helper_FastMod(hash, d, m);
 // }
 
-#define getmapindexmemsize(lsize) (sizeof(int32_t)*s_primes[lsize])
+#define getmapindexmemsize(lsize) (sizeof(int32_t)*s_primes[(int32_t)lsize])
 
 // #define getbucketbyhash(t,hash) (getbucketstart(t) + getbucketidx(hash,t->lsizenode))
 // #define getbucketbyhash(t,hash) (getbucketstart(t) + helper_FastMod(hash,t->capacity, t->fastmoder))
@@ -115,8 +115,8 @@ static const uint32_t s_primes[MAX_LOG_SIZE + 1] = {
 
 #define getmapindexmemsize(lsize) (sizeof(int32_t)*twoto(lsize))
 
-#define getbucketbyhash(t,hash)         (getbucketstart(t) + (hash)%((twoto(t->lsizenode)-1)|1))
-#define getbucketbyhashbetter(t,hash)   (getbucketstart(t) + my_better_mod(hash,((twoto(t->lsizenode)-1)|1)))
+#define getbucketbyhash(t,hash)         (getbucketstart(t) + (hash)%((sizenode(t)-1)|1))
+#define getbucketbyhashbetter(t,hash)   (getbucketstart(t) + my_better_mod(hash,((sizenode(t)-1)|1)))
 
 #endif /* MYLUA_MAP_USE_PRIME_SIZE */
 
@@ -124,9 +124,9 @@ static const uint32_t s_primes[MAX_LOG_SIZE + 1] = {
 #define getarraymemsize(lsize) (sizeof(TValue)*twoto(lsize))
 
 // get bucket index start ptr. bucket index store after node
-#define getbucketstart(t)       ((int32_t*)(get_map_ptr(t) + twoto(t->lsizenode)))
+#define getbucketstart(t)       ((int32_t*)(get_map_ptr(t) + sizenode(t)))
 
-#define getbucketbyhash_pow2(t, hash)   (getbucketstart(t) + (hash&(twoto(t->lsizenode)-1)))
+#define getbucketbyhash_pow2(t, hash)   (getbucketstart(t) + (hash&(sizenode(t)-1)))
 
 #define getbucket_byint(t,num)    getbucketbyhashbetter(t, gethash_int64(num))
 #define getbucket_byflt(t,flt)    getbucketbyhash(t, gethash_double(flt))
@@ -370,7 +370,7 @@ static void resize_table_mem(lua_State *L, Table *t, int need_rehash_map){
 
     size_t new_sz = table_isarray(t) ? getarraymemsize(lsize): getmapmemsize(lsize);
     size_t old_sz = table_isarray(t) ? getarraymemsize(t->lsizenode): getmapmemsize(t->lsizenode);
-    t->data = luaM_realloc(L, t->data, old_sz, new_sz);
+    t->data = luaM_saferealloc(L, t->data, old_sz, new_sz);
     t->lsizenode = lsize;
   }
   else {
@@ -403,12 +403,12 @@ void luaH_addsize (lua_State *L, Table *t, int32_t addsize){
   if (table_isarray(t)){
     if (isdummy(t)) {
       size_t newsize = getarraymemsize(lsize);
-      t->data = luaM_realloc(L, NULL, 0, newsize);
+      t->data = luaM_saferealloc(L, NULL, 0, newsize);
     }
     else {
       size_t oldsize = getarraymemsize(t->lsizenode);
       size_t newsize = getarraymemsize(lsize);
-      t->data = luaM_realloc(L, t->data, oldsize, newsize);
+      t->data = luaM_saferealloc(L, t->data, oldsize, newsize);
     }
     t->lsizenode = lsize;
     // not need fill nil
@@ -418,12 +418,12 @@ void luaH_addsize (lua_State *L, Table *t, int32_t addsize){
   int32_t maxcount = table_maxcount(t);
   if (isdummy(t)) {
     size_t newsize = getmapmemsize(lsize);
-    t->data = luaM_realloc(L, NULL, 0, newsize);
+    t->data = luaM_saferealloc(L, NULL, 0, newsize);
   }
   else {
     size_t oldsize = getmapmemsize(t->lsizenode);
     size_t newsize = getmapmemsize(lsize);
-    t->data = luaM_realloc(L, t->data, oldsize, newsize);
+    t->data = luaM_saferealloc(L, t->data, oldsize, newsize);
   }
   t->lsizenode = lsize;
   // rebuild bucket idx. not shrink map. 避免遍历的时候修改数组导致遍历出问题
@@ -762,7 +762,7 @@ void luaH_newkey (lua_State *L, Table *t, const TValue *key, TValue *value) {
     t->freecount--;
   }
   else {
-    if(isdummy(t) || t->count == twoto(t->lsizenode)){
+    if(isdummy(t) || t->count == sizenode(t)){
       // grow hash
       luaH_addsize(L, t, 1);
       nodes = get_map_ptr(t);
@@ -787,7 +787,7 @@ void luaH_newarrayitem (lua_State *L, Table *t, lua_Integer idx, TValue *value) 
     return;
   }
   // grow array
-  if (isdummy(t) || newcount > twoto(t->lsizenode)){
+  if (isdummy(t) || t->count == sizenode(t)){
     luaH_addsize(L, t, 1);
   }
   t->count = newcount;

@@ -101,16 +101,16 @@ typedef enum {
 
 // #define luaV_fastgeti(L,t,k,slot) \
 //   ((ttisarray(t) && l_castS2U(k) - 1u < hvalue(t)->count) \
-//     ? (slot = get_array_val(hvalue(t), k-1), !isempty(slot)) \
+//     ? (slot = get_array_val(hvalue(t), k-1), 1) \
 //     : (!ttistable(t) ? (slot = NULL, 0) \
-//                     : (slot = luaH_getint(hvalue(t), k), !isempty(slot))))
+//                     : (slot = luaH_getint(hvalue(t), k), !isabstkey(slot))))
 // opt@om 实际测试，感觉没多大优化。
 // #define luaV_fastgeti(L,t,k,slot) \
 //   (!ttistable(t)  \
 //    ? (slot = NULL, 0)  /* not a table; 'slot' is NULL and result is 0 */  \
 //    : (slot = (ttisarray(t) && l_castS2U(k) - 1u < hvalue(t)->count) \
 //               ? get_array_val(hvalue(t), k-1) : luaH_getint(hvalue(t), k), \
-//       !isempty(slot)))  /* result not empty? */
+//       !isabstkey(slot)))  /* result not empty? */
 
 
 /*
@@ -119,14 +119,12 @@ typedef enum {
 ** 'slot' points to the place to put the value.
 */
 #define luaV_finishfastset(L, t, slot, value) {\
-  if (ttisnil(value)){\
-    Table* table = hvalue(t); /* array just set nil */ \
-    if (table_isarray(table)) setnilvalue(cast(TValue *, slot)); \
-    else luaH_remove(table, nodefromval(slot));\
+  setobj2t(L, cast(TValue *, slot), value);\
+  if (!ttisnil(value)){\
+    luaC_barrierback(L, gcvalue(t), value);\
   }\
   else{\
-    setobj2t(L, cast(TValue *, slot), value);\
-    luaC_barrierback(L, gcvalue(t), value);\
+    if (ttismap(t)) luaH_remove(hvalue(t), nodefromval(slot));\
   }\
 }
 

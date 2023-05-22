@@ -74,6 +74,9 @@
 #define luaM_realloc(L, v, oldn, n) \
    luaM_realloc_(L, v, cast_sizet(oldn), cast_sizet(n))
 
+#define luaM_saferealloc(L, v, oldn, n) \
+   luaM_saferealloc_(L, v, cast_sizet(oldn), cast_sizet(n))
+
 #define luaM_shrinkvector(L,v,size,fs,t) \
    ((v)=cast(t *, luaM_shrinkvector_(L, v, &(size), fs, sizeof(t))))
 

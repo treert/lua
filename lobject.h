@@ -814,7 +814,7 @@ typedef struct Table {
 
 
 #define twoto(x)	((size_t)(1<<(x)))
-#define sizenode(t)	(twoto((t)->lsizenode))
+#define sizenode(t)	((uint32_t)twoto((t)->lsizenode))
 
 
 /* size of buffer for 'luaO_utf8esc' function */
