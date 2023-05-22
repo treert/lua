@@ -274,7 +274,9 @@ assert(a[1] == 1 and a[2] == 3 and a[3] == "a" and a[4] == "b")
 rawget({}, "x", 1)
 rawset({}, "x", 1, 2)
 assert(math.sin(1,2) == math.sin(1))
-table.sort({10,9,8,4,19,23,0,0}, function (a,b) return a<b end, "extra arg")
+-- table.sort({10,9,8,4,19,23,0,0}, function (a,b) return a<b end, "extra arg")
+-- compat@om 现在 table.sort 是稳定排序了。第三个参数是有用的
+table.sort({10,9,8,4,19,23,0,0}, function (a,b) return a<b end)
 
 
 -- test for generic load

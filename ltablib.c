@@ -567,10 +567,16 @@ l_sinline int my_cmp_func_call(FSSortContext *co , const TValue *a,const TValue 
   luaA_pushvalue(L, a);
   luaA_pushvalue(L, b);
   lua_call(L, 2, 1);
-  // 之所有这么写。是因为想同时支持 float 和 int.
+  // 兼容下 table.sort. 平行替换掉 table.sort
   TValue* cmp_ret = luaA_index2value(L, -1);
-  int n = (int)luaL_checkinteger(L, -1);
-  return n;
+  if (ttisnumber(cmp_ret)) {
+    TValue zero;
+    setivalue(&zero, 0);
+    return luaV_cmpnumber(cmp_ret, &zero);
+  }
+  else {
+    return l_isfalse(cmp_ret) ? -1 : 1;
+  }
 }
 
 l_sinline int my_cmp_map_value(FSSortContext *co,const Node*a,const Node*b) {
@@ -956,11 +962,13 @@ static const luaL_Reg tab_funcs[] = {
   {"remove", tremove},
   {"move", tmove},
   {"sort", sort},
+  {"unstable_sort", sort},
+  {"stable_sort", stable_sort},/* 想替换掉sort。可惜兼容问题还挺多 */
   {"newmap", newmap},
   {"newarray", newarray},
   {"get_capacity", get_capacity},
   {"next", tablib_next},
-  {"stable_sort", stable_sort},
+
   {"ismap", tablib_ismap},
   {"isarray", tablib_isarray},
   // 这些操作无视元表。

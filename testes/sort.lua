@@ -190,6 +190,8 @@ checkerror("wrap around", table.move, {}, minI, -2, 2)
 
 print"testing sort"
 
+--- compat@om table.sort 被替换了
+table.sort = table.unstable_sort
 
 -- strange lengths
 local a = setmetatable({}, {__len = function () return -1 end})
@@ -207,6 +209,7 @@ end
 check{1,2,3,4}
 check{1,2,3,4,5}
 check{1,2,3,4,5,6}
+
 
 
 function check (a, f)
@@ -306,5 +309,7 @@ for i=1,10 do  a[i] = {val=math.random(100)}; setmetatable(a[i], tt); end
 table.sort(a)
 check(a, tt.__lt)
 check(a)
+
+table.sort = table.stable_sort
 
 print"OK"

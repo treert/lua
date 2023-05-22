@@ -81,7 +81,6 @@ assert(t[1] == 11)
 assert(t[0] == nil)
 assert(t.m == 'mm')
 
-
 print("test stable_sort")
 local a = [1,nil,3,2]
 -- a = [1,4,2,3]

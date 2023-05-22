@@ -473,7 +473,9 @@ do   -- testing table library with metamethods
     for i = 1, 10 do
       assert(t[i] == 11 - i)
     end
-    table.sort(proxy)
+    -- compat@om table.sort 被替换掉实现了。现在不关心元表了。
+    table.unstable_sort(proxy)
+    -- table.sort(proxy)
     for i = 1, 10 do
       assert(t[i] == i and proxy[i] == i)
     end
