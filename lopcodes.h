@@ -304,7 +304,7 @@ OP_SETLIST,/*	A B C k	R[A][C+i] := R[A+i], 1 <= i <= B		*/
 
 OP_CLOSURE,/*	A Bx	R[A] := closure(KPROTO[Bx])			*/
 
-OP_NAMEDARGPREP,/* add@om A B C 调整命名参数, A 是函数本身, B 是参数的总数, C 是命名参数的对数 */
+OP_NAMEDARGPREP,/* A B C 调整命名参数, A 是函数本身, B 是参数的总数, C 是命名参数的对数 add@om */
 
 OP_VARARG,/*	A C	R[A], R[A+1], ..., R[A+C-2] = vararg		*/
 

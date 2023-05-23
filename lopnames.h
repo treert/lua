@@ -31,6 +31,7 @@ static const char *const opnames[] = {
   "SETTABUP",
   "SETTABLE",
   "SETI",
+  "SETTAIL", /*add@om*/
   "SETFIELD",
   "NEWTABLE",
   "SELF",
@@ -81,6 +82,7 @@ static const char *const opnames[] = {
   "GEI",
   "TEST",
   "TESTSET",
+  "TESTNIL", /*add@om*/
   "CALL",
   "TAILCALL",
   "RETURN",
@@ -93,6 +95,7 @@ static const char *const opnames[] = {
   "TFORLOOP",
   "SETLIST",
   "CLOSURE",
+  "NAMEDARGPREP", /*add@om*/
   "VARARG",
   "VARARGPREP",
   "EXTRAARG",
