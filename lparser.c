@@ -195,13 +195,13 @@ static void codename (LexState *ls, expdesc *e) {
 
 // add@om
 static void codenameorkeyword(LexState* ls, expdesc* e) {
-	TString* ts = getstr_from_name_or_keyword(ls, 1);
-	if (ts) {
-		codestring(e, ts);
-	}
-    else {
-        luaX_syntaxerror(ls,"expect <name> or keyword");
-    }
+  TString* ts = getstr_from_name_or_keyword(ls, 1);
+  if (ts) {
+    codestring(e, ts);
+  }
+  else {
+      luaX_syntaxerror(ls,"expect <name> or keyword");
+  }
 }
 
 
@@ -1329,6 +1329,15 @@ static void primaryexp (LexState *ls, expdesc *v) {
   }
 }
 
+l_sinline void indextestnil_addone(LexState *ls, expdesc *v) {
+  lua_assert(ls->t.token == '?');
+  if (luaX_lookahead(ls) == '?') {
+    luaX_syntaxerror(ls, "unexpect duplicate '?'");
+  }
+  luaX_next(ls);/* skip ? */
+  FuncState *fs = ls->fs;
+  luaK_indextestnil_addone(fs, v);
+}
 
 static void suffixedexp (LexState *ls, expdesc *v) {
   /* suffixedexp ->
@@ -1336,8 +1345,14 @@ static void suffixedexp (LexState *ls, expdesc *v) {
   FuncState *fs = ls->fs;
   int line = ls->linenumber;
   primaryexp(ls, v);
+  int old_tnil = v->tnil;
+  v->tnil = -1;
   for (;;) {
     switch (ls->t.token) {
+      case '?':{
+        indextestnil_addone(ls, v);
+        break;
+      }
       case '.': {  /* fieldsel */
         fieldsel(ls, v);
         break;
@@ -1361,6 +1376,7 @@ static void suffixedexp (LexState *ls, expdesc *v) {
         expdesc key;
         luaX_next(ls);
         codenameorkeyword(ls, &key);// mod@om
+        if (ls->t.token == '?') indextestnil_addone(ls, v);
         luaK_self(fs, v, &key);
         funcargs(ls, v, line);
         break;
@@ -1370,9 +1386,12 @@ static void suffixedexp (LexState *ls, expdesc *v) {
         funcargs(ls, v, line);
         break;
       }
-      default: return;
+      default: goto the_end;
     }
   }
+  the_end:
+  luaK_indextestnil_finish(fs, v);
+  v->tnil = old_tnil;
 }
 
 

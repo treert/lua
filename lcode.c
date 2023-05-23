@@ -1599,7 +1599,31 @@ void luaK_prefix (FuncState *fs, UnOpr op, expdesc *e, int line) {
   }
 }
 
+void luaK_indextestnil_addone(FuncState *fs, expdesc *v) {
+  int reg = luaK_exp2anyreg(fs, v);
+  int ins_idx = condjump(fs, OP_TESTNIL, reg, 0, 0, 0);
+  if (v->tnil >= 0) {
+    fixjump(fs, ins_idx, v->tnil);
+  }
+  v->tnil = ins_idx;
+}
 
+void luaK_indextestnil_finish(FuncState *fs, expdesc *v) {
+  if (v->tnil >= 0) {
+    int idx = v->tnil;
+    int reg = luaK_exp2anyreg(fs, v);
+    luaK_jump(fs);
+    int pc = fs->pc;
+    fixjump(fs, pc-1, pc);
+    luaK_codeABC(fs, OP_LOADNIL, reg, 0, 0);
+    do
+    {
+      int next_idx = getjump(fs, idx);
+      fixjump(fs, idx, pc);
+      idx = next_idx;
+    }while(idx >= 0);
+  }
+}
 /*
 ** Process 1st operand 'v' of binary operation 'op' before reading
 ** 2nd operand.
