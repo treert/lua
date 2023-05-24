@@ -63,7 +63,8 @@ typedef enum {
   VVARARG  /* vararg expression; info = instruction pc */
 } expkind;
 
-
+#define vkisnil(k)      ((k) == VNIL)
+#define vkisnotnil(k)   ((k)==VTRUE||(k)==VFALSE||(k)==VKFLT||(k)==VKINT||(k)==VKSTR)
 #define vkisvar(k)	(VLOCAL <= (k) && (k) <= VINDEXSTR)
 #define vkisindexed(k)	(VINDEXED <= (k) && (k) <= VINDEXSTR)
 
@@ -87,6 +88,7 @@ typedef struct expdesc {
   int t;  /* patch list of 'exit when true' */
   int f;  /* patch list of 'exit when false' */
   int tnil; /* last pc in test nil index list */
+  int qq; /* for ??. >=0: jump pc, <-1: always jump, =-1: no jump*/
 } expdesc;
 
 

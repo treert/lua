@@ -27,11 +27,19 @@ end
 
 print "tb.end = ok"
 
+print "start test ??"
+
 local xxxx = nil
 assert((xxxx??123) == 123)
 assert((xxxx??xxxx??false or 123) == 123)
 assert((false??123) == false)
 assert((false or 123) == 123)
+
+print "start test ?"
+assert(xxx?.xx == nil)
+assert(xxx?.xx?.xxx?.xx == nil)
+assert(xxx?.xx?.xxx?.xx ?? 21 == 21)
+assert(xxx?:xx()?['xxx']?.xx ?? 21 == 21)
 
 print "test yield concat here"
 

@@ -1332,7 +1332,7 @@ static void primaryexp (LexState *ls, expdesc *v) {
 l_sinline void indextestnil_addone(LexState *ls, expdesc *v) {
   lua_assert(ls->t.token == '?');
   if (luaX_lookahead(ls) == '?') {
-    luaX_syntaxerror(ls, "unexpect duplicate '?'");
+    luaX_syntaxerror(ls, "expect index or funcall after '?'");
   }
   luaX_next(ls);/* skip ? */
   FuncState *fs = ls->fs;

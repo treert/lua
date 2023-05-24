@@ -1,7 +1,7 @@
 [my lua](./doc/mylua.md)
 --------
 ## my lua 的主要修改
-- 修改了 table 的实现。现在 **table = map | array**。map is default，是个支持排序的 HashTable。
+- 修改了 table 的实现。现在 **table = ordered_map | array**。map is default，是个支持排序的 HashTable。
 - 增加了一些语法。[增量语法糖](#增量语法糖)
 - 增加了一些 api。[table-newapi](#mylua-table-api)
 - 增加稳定排序 [stable sort](#talbestable_sort)
@@ -11,11 +11,11 @@
 ### 关于 lua
 实现了 map + array + stable_sort 后。
 重新看lua，lua的table如果正确使用，性能也是极好的。【当然 for in pairs 的实现需要优化下, 总不能比ipairs 还慢呀】
-**因为 map 多一层索引的问题。mylua的性能比不了lua了。**
+**因为 ordered_map 多一层索引的问题。mylua的性能比不了lua了。**
 不过想到因此带来的收益，还行，也没差太多。空表内存还能小一个8字节指针呢。
 
 感觉 lua 不会修改当前 hash 部分的实现了。虽然**遍历无序且不支持排序**，但是性能好呀。
-也许哪天不在乎内存，可以在 hash 节点里增加双向遍历索引，像 php 一样。
+也许哪天不在乎内存，可以在 hash 节点里增加双向遍历索引，像 php 一样。**感觉也不太可能，lua现在的hash实现性能还是很好的**
 lua 的`#`是个问题。也许哪天分离出`array_count`和`hash_count`出来。权衡一下还是可行的。
 
 ## 增量语法糖
@@ -24,7 +24,9 @@ lua 的`#`是个问题。也许哪天分离出`array_count`和`hash_count`出来
   - 如：`$"$a ${1+3}" == "nil 4"`
   - 如：`local a = ${print('hello')}`
 - 增加了 continue 关键字。
-- 增加 ?? 运算。
+- 增加 ?? 运算。替换`a or 1`这种写法。**有不同的地方，只检测nil，所以`(false??1) == false`**
+- 增加 ? 语法糖。替换`t and t.x`这种写法。
+  - 例如：`xxx?.xx?:ff?()?[12] ?? 123 == 123`
 - keyword 特殊情况下可以当做普通的 name。如：`t.end = 1`
 - 函数参数支持命名参数。如：`f(1,2,3,a1=1,a2=2)`
 - 增加 array， 作为 table 变种存在。例子：`[1,2,3]`
@@ -39,6 +41,9 @@ lua 的`#`是个问题。也许哪天分离出`array_count`和`hash_count`出来
 - `#`获取长度的指令。`#map`获取hash表元素个数。`#array`获取数组的曾经有效的最大索引。
 - `next` 基本还是兼容的。不过 lua 原先的实现有个副作用效果。
   - 已经删除的 key, 大概率还能正确的 next. 现在不行了, 会报错.
+
+### 特殊兼容处理
+- table.pack 返回 array，用元表添加了`.n`。最好还是用`#t`获取长度。最快。
 
 ## for in
 for in 特殊支持 table 的内部索引。**耗时是原先 pairs 的 20%.**
@@ -106,6 +111,7 @@ mylua 把 table 分成了纯粹的 map,array 两个结构。默认是 map。
 - 默认初始化`{}`如果数组和kv混合，一般是kv在前。但是不保证。
 - 当前的实现方案，talbe的内存是固定的若干种。倍增分配。
 - array 额外提供的array就是个简单的数组
+  - 数组里允许 nil 存在。
   - **数组只能从结尾处加元素。**这样使用起来比较安全，**不然`array[2^30]=1`这个代码会分配16G内存！！！**
   - 性能略低 lua 的array 一点点。【按理应该几乎一样呀】
     - 【有些搞不懂，`array[1000]` 差距达到10%】应该都是基本的数值呀.

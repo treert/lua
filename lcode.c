@@ -950,6 +950,13 @@ void luaK_exp2nextreg (FuncState *fs, expdesc *e) {
   exp2reg(fs, e, fs->freereg - 1);
 }
 
+/*
+** Ensures final expression result is in special register. add@om
+*/
+void luaK_exp2reg (FuncState *fs, expdesc *e, int reg) {
+  lua_assert(fs->freereg > reg);
+  exp2reg(fs, e, reg);
+}
 
 /*
 ** Ensures final expression result is in some (any) register
@@ -1612,6 +1619,9 @@ void luaK_indextestnil_finish(FuncState *fs, expdesc *v) {
   if (v->tnil >= 0) {
     int idx = v->tnil;
     int reg = luaK_exp2anyreg(fs, v);
+    if (v->tnil == fs->pc-1) {
+      luaX_syntaxerror(fs->ls, "expect index or funcall after '?', but it ended.");
+    }
     luaK_jump(fs);
     int pc = fs->pc;
     fixjump(fs, pc-1, pc);
@@ -1641,12 +1651,19 @@ void luaK_infix (FuncState *fs, BinOpr op, expdesc *v) {
     }
     // add@om
     case OPR_QQ: {// e1 ?? e2
-        // ?? 不好仿照 and or 来实现了，有点难。用自己的方式来实现。
-        // 写入同一个寄存器，?? 设计成右结合的，这样可以优化下连续??的情况。
-        luaK_exp2nextreg(fs, v);
-        fs->freereg--;// 回退一格，空出位置
-        lua_assert(v->u.info == fs->freereg);
-        v->u.info = condjump(fs, OP_TESTNIL, fs->freereg, 0, 0, 1) - 1;// 讨巧
+        // ?? 不好仿照 and or 来实现了，还没完全懂。用自己的方式来实现。
+        if (vkisnotnil(v->k)) {
+          // just jump, will ignore e2
+          v->qq = - luaK_jump(fs) - 1;
+        }
+        else if(vkisnil(v->k)) {
+          // ignore e1
+          v->qq = -1;
+        }
+        else {
+          int reg = luaK_exp2anyreg(fs, v);
+          v->qq = condjump(fs, OP_TESTNIL, reg, 0, 0, 1);
+        }
         break;
     }
     case OPR_CONCAT: {
@@ -1727,11 +1744,21 @@ void luaK_posfix (FuncState *fs, BinOpr opr,
     }
     // add@om
     case OPR_QQ: {// e1 ?? e2
-      luaK_exp2nextreg(fs, e2);
-      int pc = e1->u.info;
-      lua_assert(GETARG_A(fs->f->code[pc]) == fs->freereg - 1);
-      fixjump(fs, pc+1, fs->pc);
-      *e1 = *e2;
+      if (e1->qq == -1) {
+        lua_assert(vkisnil(e1->k));
+        *e1 = *e2;/* e1 is nil, ignore */
+      }
+      else if (e1->qq >= 0) {
+        lua_assert(e1->k == VNONRELOC);
+        luaK_exp2reg(fs, e2, e1->u.info);/* e2 store result into e1 reg */
+        int pc = e1->qq;
+        fixjump(fs, pc, fs->pc);/* jump through e2, e1 result is nil. */
+        *e1 = *e2;
+      }
+      else {
+        int pc = - e1->qq - 1;
+        fixjump(fs, pc, fs->pc);/* jump through e2, e1 is result */
+      }
       break;
     }
     case OPR_CONCAT: {  /* e1 .. e2 */
