@@ -15,6 +15,7 @@ temp
 lua
 
 build/
+runtime/
 /.vscode/
 /testes/.vscode/
 *.exe
