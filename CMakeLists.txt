@@ -56,11 +56,14 @@ target_link_libraries ( lua libluadll )
 add_executable ( luac ${SRC_CORE} luac.c mylua.rc)
 
 # message(FATAL_ERROR "${PROJECT_SOURCE_DIR}/../luafilesystem/src")
-set(LFS_DIR "${PROJECT_SOURCE_DIR}/../luafilesystem/src")
-add_library ( lfs SHARED ${LFS_DIR}/lfs.c ${LFS_DIR}/lfs.h)
+# set(LFS_DIR "${PROJECT_SOURCE_DIR}/../luafilesystem/src")
+# add_library ( lfs SHARED ${LFS_DIR}/lfs.c ${LFS_DIR}/lfs.h)
 # target_include_directories (lfs  PRIVATE ${PROJECT_SOURCE_DIR})
 # target_sources(lfs lfs.c)
-target_link_libraries ( lfs libluadll )
+# target_link_libraries ( lfs libluadll )
+
+# add_library(lfs SHARED lfs.h lfs.c)
+# target_link_libraries(lfs libluadll)
 
 # https://stackoverflow.com/questions/10487256/cmake-how-to-properly-copy-static-librarys-header-file-into-usr-include
 # File: target_public_headers.cmake 应该放到公共函数中
@@ -71,7 +74,7 @@ endmacro()
 target_public_headers(libluadll lua.h luaconf.h lauxlib.h lualib.h)
 
 # https://stackoverflow.com/questions/22278381/cmake-add-library-followed-by-install-library-destination
-install (TARGETS lua luac libluadll lfs
+install (TARGETS lua luac libluadll
          ARCHIVE DESTINATION lib
          LIBRARY DESTINATION lib
          RUNTIME DESTINATION bin
