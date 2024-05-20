@@ -1185,7 +1185,7 @@ static void dollar_expr_func(LexState* ls, expdesc* e) {
 }
 
 static void dollar_expr(LexState* ls, expdesc* e) {
-    if (ls->dollar_flag) {
+    if (ls->dollar_flag && !ls->dollar_open_cnt) {
         dollar_expr_string(ls, e);
     }
     else {

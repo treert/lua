@@ -73,5 +73,10 @@ else
     assert(not ok)
 end
 
+ok = pcall(function ()
+    print($"${ ${} }")
+end)
+
+assert(ok)
 
 print "$ OK\n"
