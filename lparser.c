@@ -1034,31 +1034,25 @@ static void setvararg (FuncState *fs, int nparams) {
 
 
 static void parlist (LexState *ls) {
-  /* parlist -> [ {NAME ','} (NAME | '...') ] */
+  /* parlist -> [ {NAME ','} ('...') ] */
   FuncState *fs = ls->fs;
   Proto *f = fs->f;
   int nparams = 0;
   int isvararg = 0;
   if (ls->t.token != ')') {  /* is 'parlist' not empty? */
-    do {
-      switch (ls->t.token) {
-        case TK_NAME: {
-          new_localvar(ls, str_checkname(ls));
-          nparams++;
-          break;
-        }
-        case TK_DOTS: {
-          luaX_next(ls);
-          isvararg = 1;
-          break;
-        }
-        // add@om
-        case ')': {
-            break;// 允许 function(a,b,) end
-        }
-        default: luaX_syntaxerror(ls, "<name> or '...' expected");
+    // {NAME ','}
+    while (ls->t.token == TK_NAME) {
+      new_localvar(ls, str_checkname(ls));
+      nparams++;
+      if (!testnext(ls, ',')){
+        check(ls, ')');// 后面必须是分隔符，不是 , 就必须是 )
       }
-    } while (!isvararg && testnext(ls, ','));
+    }
+    // ...
+    if (ls->t.token == TK_DOTS) {
+      luaX_next(ls);
+      isvararg = 1;
+    }
   }
   adjustlocalvars(ls, nparams);
   f->numparams = cast_byte(fs->nactvar);
