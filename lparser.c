@@ -139,6 +139,19 @@ static void check_match (LexState *ls, int what, int who, int where) {
   }
 }
 
+// add@om only check, not move next.
+static void check_match_only (LexState *ls, int what, int who, int where) {
+  if (l_unlikely(ls->t.token != what)) {
+    if (where == ls->linenumber)  /* all in the same line? */
+      error_expected(ls, what);  /* do not need a complex message */
+    else {
+      luaX_syntaxerror(ls, luaO_pushfstring(ls->L,
+             "%s expected (to close %s at line %d)",
+              luaX_token2str(ls, what), luaX_token2str(ls, who), where));
+    }
+  }
+}
+
 // add@om
 static TString* getstr_from_name_or_keyword(LexState* ls, int skip_token) {
     TString* ts;
@@ -154,8 +167,14 @@ static TString* getstr_from_name_or_keyword(LexState* ls, int skip_token) {
     }
 }
 
+// add@om
 static int NextIsNameAndEq(LexState* ls) {
     return ls->t.token == TK_NAME && luaX_lookahead(ls) == '=';
+}
+
+// add@om
+static int test_cur_and_ahead(LexState* ls, int cur, int ahead) {
+  return ls->t.token == cur && luaX_lookahead(ls) == ahead;
 }
 
 static TString *str_checkname (LexState *ls) {
@@ -1187,105 +1206,110 @@ static void dollar_expr(LexState* ls, expdesc* e) {
     }
 }
 
-
 static int explist(LexState* ls, expdesc* v) {
   /* explist -> expr { ',' expr } */
-    int n = 1;  /* at least one expression */
-    expr(ls, v);
-    while (testnext(ls, ',')) {
-        luaK_exp2nextreg(ls->fs, v);
-        expr(ls, v);
-        n++;
-    }
-    return n;
+  int n = 1;  /* at least one expression */
+  expr(ls, v);
+  while (testnext(ls, ',')) {
+      luaK_exp2nextreg(ls->fs, v);
+      expr(ls, v);
+      n++;
+  }
+  return n;
 }
 
-// add@om
-static void funcargs_namedargs(LexState* ls, expdesc* f, int line) {
-
+// add@om 可以中断于 Name '='，可以返回 0。用于函数传参
+static int explist_in_funcall(LexState* ls, expdesc* v, int line) {
+  /* explist -> {expr ','} */
+  int n = 0;
+  v->k = VVOID;
+  if (ls->t.token == ')') return 0;
+  while (!NextIsNameAndEq(ls)) {
+    if (n) luaK_exp2nextreg(ls->fs, v);
+    expr(ls, v);
+    n++;
+    if (testnext(ls, ',')) continue ;
+    check_match_only(ls, ')', '(', line);
+    break;
+  }
+  return n;
 }
 
 // mod@om
 static void funcargs(LexState* ls, expdesc* f, int line) {
-    FuncState* fs = ls->fs;
-    expdesc args;
-    int base, nparams = 0, namedargcnt = 0;
-    switch (ls->t.token) {
-    case '(': {  /* funcargs -> '(' [ explist ] ')' */
-        luaX_next(ls);
-        if (ls->t.token == ')')  /* arg list is empty? */
-            args.k = VVOID;
-        else {
-            args.k = VVOID;
-            // 支持结尾多一个',', 例子：f(a,b,)
-            // 【注意：如果用了命名参数，可变参数数组退化成固定数组 】
-            // 数组参数
-            while (ls->t.token != ')' && !NextIsNameAndEq(ls)) {
-                if (nparams) luaK_exp2nextreg(ls->fs, &args);
-                expr(ls, &args);
-                nparams++;
-                if (ls->t.token == ')') break;
-                checknext(ls, ','); // eat ','
-            }
-            if (nparams) {
-                if (!NextIsNameAndEq(ls) && hasmultret(args.k)){
-                    // 没有命名参数，切最后的数组参数是可变的。
-                    luaK_setmultret(fs, &args);
-                    nparams = -1;
-                }
-                else {
-                    luaK_exp2nextreg(ls->fs, &args);
-                }
-            }
-            // 命名参数 name = expr. 
-            while (NextIsNameAndEq(ls)) {
-                codename(ls, &args);
-                luaK_exp2nextreg(ls->fs, &args);
-                checknext(ls, '=');
-                expr(ls, &args);
-                luaK_exp2nextreg(ls->fs, &args);
-                namedargcnt++;
-                if (ls->t.token == ')') break;
-                checknext(ls, ','); // eat ','
-            }
-        }
-        check_match(ls, ')', '(', line);
-        break;
+  FuncState* fs = ls->fs;
+  expdesc args;
+  lua_assert(f->k == VNONRELOC);
+  int base = f->u.info;  /* base register for call */
+  int has_self = fs->freereg - (base + 1);// 可能有self参数
+  lua_assert(has_self == 0 || has_self == 1);
+
+  int pre_args_cnt = 0, named_args_cnt = 0, post_args_cnt = 0;
+  switch (ls->t.token) {
+    case '(': {  /* funcargs -> '(' { expr ',' } { Name '=' expr ','} { expr ',' } ')' */
+      luaX_next(ls);
+      // { expr ',' }
+      pre_args_cnt = explist_in_funcall(ls, &args, line);
+      if (NextIsNameAndEq(ls)) {
+        if (pre_args_cnt) luaK_exp2nextreg(ls->fs, &args);
+        // { Name '=' exp ','}
+        do{
+          codename(ls, &args);
+          luaK_exp2nextreg(ls->fs, &args);
+          checknext(ls, '=');
+          expr(ls, &args);
+          luaK_exp2nextreg(ls->fs, &args);
+          named_args_cnt += 2;
+          if (testnext(ls, ',')) continue;
+          check_match_only(ls, ')', '(', line);
+          break;
+        } while (NextIsNameAndEq(ls));
+        // 可能还有 { expr ',' }
+        post_args_cnt = explist_in_funcall(ls, &args, line);
+      }
+      check_match(ls, ')', '(', line);
+      // 特殊处理最后
+      break;
     }
     case '{': {  /* funcargs -> constructor */
-        constructor(ls, &args);
-        goto OneArg;
+      constructor(ls, &args);
+      goto OneArg;
     }
     case TK_STRING: {  /* funcargs -> STRING */
-        codestring(&args, ls->t.seminfo.ts);
-        luaX_next(ls);  /* must use 'seminfo' before 'next' */
-        goto OneArg;
+      codestring(&args, ls->t.seminfo.ts);
+      luaX_next(ls);  /* must use 'seminfo' before 'next' */
+      goto OneArg;
     }
-    case '$': {
-        dollar_expr(ls, &args);
-        goto OneArg;
+    case '$': {  /* funcargs -> $string or $function */
+      dollar_expr(ls, &args);
+      goto OneArg;
     }
     default: {
-        luaX_syntaxerror(ls, "function arguments expected");
-        // 编程trik，上面的error会throw
+      luaX_syntaxerror(ls, "function arguments expected");
+      // 编程trik，上面的error会throw
     OneArg: {
-        luaK_exp2nextreg(fs, &args);
-        nparams = 1;
+        pre_args_cnt = 1;
         break;
-        }
+      }
     }
-    }
+  }
 
-  lua_assert(f->k == VNONRELOC);
-  base = f->u.info;  /* base register for call */
-  if (namedargcnt) {
-      nparams = -1;
-      luaK_codeABC(fs, OP_NAMEDARGPREP, base, fs->freereg - base - 1, namedargcnt);
+  pre_args_cnt += has_self;
+  int nparams = pre_args_cnt;
+
+  if (hasmultret(args.k)) {
+    luaK_setmultret(fs, &args);
+    post_args_cnt = LUA_MULTRET;
+    nparams = LUA_MULTRET;
+  } else {
+    if (args.k != VVOID)
+      luaK_exp2nextreg(fs, &args);  /* close last argument */
   }
-  else if (nparams != -1) { // 可能有self参数
-    nparams = fs->freereg - (base + 1);
+
+  if (named_args_cnt) {
+    nparams = -1;
+    luaK_codeABC(fs, OP_NAMEDARGPREP, pre_args_cnt, post_args_cnt + 1, named_args_cnt);
   }
-  
   init_exp(f, VCALL, luaK_codeABC(fs, OP_CALL, base, nparams+1, 2));
   luaK_fixline(fs, line);
   fs->freereg = base+1;  /* call remove function and arguments and leaves
@@ -1370,7 +1394,7 @@ static void suffixedexp (LexState *ls, expdesc *v) {
         expdesc key;
         luaX_next(ls);
         codenameorkeyword(ls, &key);// mod@om
-        if (ls->t.token == '?') indextestnil_addone(ls, v);
+        if (ls->t.token == '?') indextestnil_addone(ls, v);// todo@om has bug, need fix
         luaK_self(fs, v, &key);
         funcargs(ls, v, line);
         break;

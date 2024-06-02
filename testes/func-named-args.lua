@@ -25,6 +25,7 @@ end
 
 assert(f(1,2,3) == 6)
 assert(f(g()) == 6)
--- assert(f(g(),a=11) == 11) -- 哎，而且还不能简单的把命名参数放到数组参数前面，因为有self。
+assert(f(a=11, g()) == 11 + 6) 
+assert(f(a=11,b=11, g()) == 11 + 6) 
 
 print "test named args OK"

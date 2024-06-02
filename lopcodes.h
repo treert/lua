@@ -304,7 +304,7 @@ OP_SETLIST,/*	A B C k	R[A][C+i] := R[A+i], 1 <= i <= B		*/
 
 OP_CLOSURE,/*	A Bx	R[A] := closure(KPROTO[Bx])			*/
 
-OP_NAMEDARGPREP,/* A B C 调整命名参数, A 是函数本身, B 是参数的总数, C 是命名参数的对数 add@om */
+OP_NAMEDARGPREP,/* A B C 调整命名参数, A 是前面参数数量, B是后面参数数量+1, C 是命名参数的对数。它的后面一条指令必然是 OP_Call or OP_TailCall add@om */
 
 OP_VARARG,/*	A C	R[A], R[A+1], ..., R[A+C-2] = vararg		*/
 
@@ -338,6 +338,9 @@ OP_EXTRAARG/*	Ax	extra (larger) argument for previous opcode	*/
 
   (*) In OP_VARARG, if (C == 0) then use actual number of varargs and
   set top (like in OP_CALL with C == 0).
+
+  (*) add@om In OP_NAMEDARGPREP, then next instruction is OP_CALL or OP_TAILCALL
+  and it will use next instruction's A.
 
   (*) In OP_RETURN, if (B == 0) then return up to 'top'.
 

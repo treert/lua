@@ -942,65 +942,55 @@ static void pushclosure (lua_State *L, Proto *p, UpVal **encup, StkId base,
 }
 
 // add@om
-static void adjust_named_args(lua_State *L, StkId func, int all, int num) {
+static void adjust_named_args(lua_State *L, StkId func, int pre_args_cnt, int named_args_cnt, int post_args_cnt) {
   int tag = ttypetag(s2v(func));
-  num = num*2;// 命名参数是两个一组
   if(tag == LUA_VLCL){
-    Proto* p = clLvalue(s2v(func))->p;
-    int fixparams = p->numparams;// 函数的固定参数个数
-    int arrnum = all - num;// 数组参数数量
+    L->top = func + 1 + pre_args_cnt + named_args_cnt + post_args_cnt;
+    Proto* p = clLvalue(s2v(func))->p; // 这之后func 可能不再有效。不用使用
     TString** argnames = p->argnames;// 参数名数组
-    StkId argbase = func + 1;
-    StkId namedbase = argbase + arrnum;
-    if (arrnum >= fixparams) {
-      for (int i = 0; i < fixparams; i++) {
-        TString* argname = argnames[i];
-        for (int k = num-2; k >= 0; k -= 2) {
-          TString* inname = tsvalue(s2v(namedbase + k));
-          if (luaS_eqstr(argname, inname)) {
-            setobjs2s(L, argbase + i, namedbase + k + 1);
-            break;
-          }
+    int fixparams = p->numparams;// 函数的固定参数个数
+    // 需要腾出空间给固定参数。假装在pre_args 填充足够的nil
+    if (pre_args_cnt < fixparams) {
+      int offset = fixparams - pre_args_cnt;
+      luaD_checkstack(L, offset);
+      L->top += offset;
+      for (int i = 1; i <= named_args_cnt + post_args_cnt; i++){
+        setobjs2s(L, L->top - i, L->top - i - offset);
+      }
+      for (int i = 1; i <= offset; i++){
+        setnilvalue(s2v(L->top - (named_args_cnt + post_args_cnt) - i));
+      }
+      pre_args_cnt = fixparams;
+    }
+    StkId post_args_base = L->top - post_args_cnt;
+    StkId named_args_base = post_args_base - named_args_cnt;
+    StkId pre_args_base = named_args_base - pre_args_cnt;
+    // 赋值命名参数
+    for (int i = 0; i < fixparams; i++) {
+      TString* argname = argnames[i];
+      for (int k = named_args_cnt-2; k >= 0; k -= 2) {
+        TString* inname = tsvalue(s2v(named_args_base + k));
+        if (luaS_eqstr(argname, inname)) {
+          setobjs2s(L, pre_args_base + i, named_args_base + k + 1);
+          break;
         }
       }
     }
-    else{
-      // 扩展堆栈
-      L->top = argbase + all;
-      luaD_checkstack(L, fixparams - all);// 这之后，func 可能失效了，不能用
-      argbase = L->top - all;
-      namedbase = argbase + arrnum;
-
-      TValue namedvalues[256];
-      for (int i = 0; i < fixparams; i++){
-        TString* argname = argnames[i];
-        for (int k = num - 2; k >= 0; k -= 2) {
-          TString* inname = tsvalue(s2v(namedbase + k));
-          if (luaS_eqstr(argname, inname)) {
-            setobj(L, &namedvalues[i], s2v(namedbase + k + 1));
-            goto NextArg;
-          }
-        }
-        settt_(&namedvalues[i], LUA_TNONE_BYTE);
-        NextArg:;
+    // 清理命名参数。调整额外参数位置
+    if (p->is_vararg) {
+      int del_num = named_args_cnt + pre_args_cnt - fixparams;// 前置多余的参数也是无效的。也许可以警告下
+      for (int i = 0; i < post_args_cnt; i++){
+        setobjs2s(L, pre_args_base + fixparams + i, post_args_base + i);
       }
-      for (int i = 0; i < fixparams; i++)
-      {
-        if(rawtt(&namedvalues[i]) != LUA_TNONE_BYTE){
-          setobj(L, s2v(argbase + i), &namedvalues[i]);
-        }
-        else{
-          if (i >= arrnum) {
-            setnilvalue(s2v(argbase + i));
-          }
-        }
-      }
+      L->top -= del_num;
+    } else {
+      L->top = pre_args_base + fixparams;// 直接裁剪
     }
-    L->top = argbase + fixparams;
   }
   else{
-    // can not support c function, just delete named args now.
-    L->top = func + 1 + all - num;
+    // can not support c function, only left pre args.
+    // luaG_runerror(L, "named args can not support c function");
+    L->top = func + pre_args_cnt + 1;
   }
 }
 
@@ -2146,10 +2136,16 @@ void luaV_execute (lua_State *L, CallInfo *ci) {
       }
       // add@om
       vmcase(OP_NAMEDARGPREP) {
-        StkId ra = RA(i);
-        int all = GETARG_B(i);
-        int num = GETARG_C(i);
-        Protect(adjust_named_args(L, ra, all, num));
+        int pre_args_cnt = GETARG_A(i);
+        int post_args_cnt = GETARG_B(i) - 1;
+        int named_args_cnt = GETARG_C(i);
+        lua_assert(GET_OPCODE(*pc) == OP_CALL || GET_OPCODE(*pc) == OP_TAILCALL);
+        StkId ra= RA(*pc);
+        if (post_args_cnt < 0){
+          post_args_cnt = cast_int(L->top - ra) - 1 - pre_args_cnt - named_args_cnt;
+        }
+        lua_assert(post_args_cnt >= 0);
+        ProtectNT(adjust_named_args(L, ra, pre_args_cnt, named_args_cnt, post_args_cnt));
         vmbreak;
       }
       vmcase(OP_VARARG) {
