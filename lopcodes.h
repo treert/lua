@@ -283,7 +283,7 @@ OP_GEI,/*	A sB k	if ((R[A] >= sB) ~= k) then pc++		*/
 
 OP_TEST,/*	A k	if (not R[A] == k) then pc++			*/
 OP_TESTSET,/*	A B k	if (not R[B] == k) then pc++ else R[A] := R[B] (*) */
-OP_TESTNIL,/* A k if((R[A] == nil) == k) then pc++ add@om */
+OP_TESTNIL,/* A B C k if((R[A] == nil) == k) then pc++ else if C == 1 then set R[B] = nil and set top point to B+1 add@om */
 
 OP_CALL,/*	A B C	R[A], ... ,R[A+C-2] := R[A](R[A+1], ... ,R[A+B-1]) */
 OP_TAILCALL,/*	A B C k	return R[A](R[A+1], ... ,R[A+B-1])		*/

@@ -1347,16 +1347,6 @@ static void primaryexp (LexState *ls, expdesc *v) {
   }
 }
 
-l_sinline void indextestnil_addone(LexState *ls, expdesc *v) {
-  lua_assert(ls->t.token == '?');
-  if (luaX_lookahead(ls) == '?') {
-    luaX_syntaxerror(ls, "expect index or funcall after '?'");
-  }
-  luaX_next(ls);/* skip ? */
-  FuncState *fs = ls->fs;
-  luaK_indextestnil_addone(fs, v);
-}
-
 static void suffixedexp (LexState *ls, expdesc *v) {
   /* suffixedexp ->
        primaryexp { '.' NAME | '[' exp ']' | ':' NAME funcargs | funcargs } */
@@ -1368,14 +1358,19 @@ static void suffixedexp (LexState *ls, expdesc *v) {
   for (;;) {
     switch (ls->t.token) {
       case '?':{
-        indextestnil_addone(ls, v);
+        luaX_next(ls);/* skip ? */
+        if (ls->t.token == '?') {
+          luaX_syntaxerror(ls, "expect index or funcall after '?'");
+        }
+        luaK_exp2anyreg(fs, v);
+        luaK_indextestnil_addone(fs, v);// 总感觉用的有问题
         break;
       }
       case '.': {  /* fieldsel */
         fieldsel(ls, v);
         break;
       }
-      case '[': {  /* '[' exp ']' */
+      case '[': {  /* '[' exp ']' */ // todo@om 这儿似乎可能使用多个reg，为什么不出现问题呀。
         // '[]'【 for t[]=x】
         if (luaX_lookahead(ls) == ']') {
           luaK_exp2anyregup(fs, v);
@@ -1394,8 +1389,11 @@ static void suffixedexp (LexState *ls, expdesc *v) {
         expdesc key;
         luaX_next(ls);
         codenameorkeyword(ls, &key);// mod@om
-        if (ls->t.token == '?') indextestnil_addone(ls, v);// todo@om has bug, need fix
         luaK_self(fs, v, &key);
+        if (ls->t.token == '?') {
+          luaX_next(ls);
+          luaK_indextestnil_addone(fs, v);
+        }
         funcargs(ls, v, line);
         break;
       }

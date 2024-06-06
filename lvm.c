@@ -1902,7 +1902,20 @@ void luaV_execute (lua_State *L, CallInfo *ci) {
       vmcase(OP_TESTNIL) {
         StkId ra = RA(i);
         int cond = !ttisnil(s2v(ra));
-        docondjump();
+        if (cond != GETARG_k(i)) 
+          pc++;
+        else {
+          int c = GETARG_C(i);
+          if (c) {
+            StkId rb = RB(i);
+            if ( ra != rb) {
+              setobj2s(L, rb, s2v(ra));
+            }
+            L->top = rb + 1;
+          }
+          donextjump(ci);
+        }
+        // docondjump();
         vmbreak;
       }
       vmcase(OP_CALL) {

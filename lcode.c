@@ -1607,7 +1607,7 @@ void luaK_prefix (FuncState *fs, UnOpr op, expdesc *e, int line) {
 }
 
 void luaK_indextestnil_addone(FuncState *fs, expdesc *v) {
-  int reg = luaK_exp2anyreg(fs, v);
+  int reg = v->u.info;// 不知道有没有问题呀
   int ins_idx = condjump(fs, OP_TESTNIL, reg, 0, 0, 0);
   if (v->tnil >= 0) {
     fixjump(fs, ins_idx, v->tnil);
@@ -1617,18 +1617,30 @@ void luaK_indextestnil_addone(FuncState *fs, expdesc *v) {
 
 void luaK_indextestnil_finish(FuncState *fs, expdesc *v) {
   if (v->tnil >= 0) {
-    int idx = v->tnil;
-    int reg = luaK_exp2anyreg(fs, v);
+    int need_set_top;
+    int reg;
+    if (v->k == VCALL) {
+      reg = fs->freereg - 1;
+      need_set_top = 1;
+    } else {
+      reg = luaK_exp2anyreg(fs, v);
+      need_set_top = 1;
+    }
     if (v->tnil == fs->pc-1) {
       luaX_syntaxerror(fs->ls, "expect index or funcall after '?', but it ended.");
     }
-    luaK_jump(fs);
     int pc = fs->pc;
-    fixjump(fs, pc-1, pc);
-    luaK_codeABC(fs, OP_LOADNIL, reg, 0, 0);
+    int idx = v->tnil;
     do
     {
       int next_idx = getjump(fs, idx);
+      if (need_set_top) {
+        lua_assert(idx > 0);
+        Instruction *test = &fs->f->code[idx-1];
+        lua_assert(GET_OPCODE(*test) == OP_TESTNIL);
+        SETARG_B(*test, reg);
+        SETARG_C(*test, 1);
+      }
       fixjump(fs, idx, pc);
       idx = next_idx;
     }while(idx >= 0);
@@ -1662,6 +1674,8 @@ void luaK_infix (FuncState *fs, BinOpr op, expdesc *v) {
         }
         else {
           int reg = luaK_exp2anyreg(fs, v);
+          // todo@om 本来觉得应该加这行的。结果发现不行。assert(xxx?:xx()?['xxx']?.xx ?? 21 == 21) 报错
+          // freeexp(fs, v);
           v->qq = condjump(fs, OP_TESTNIL, reg, 0, 0, 1);
         }
         break;
@@ -1750,7 +1764,7 @@ void luaK_posfix (FuncState *fs, BinOpr opr,
       }
       else if (e1->qq >= 0) {
         lua_assert(e1->k == VNONRELOC);
-        luaK_exp2reg(fs, e2, e1->u.info);/* e2 store result into e1 reg */
+        exp2reg(fs, e2, e1->u.info);/* e2 store result into e1 reg */
         int pc = e1->qq;
         fixjump(fs, pc, fs->pc);/* jump through e2, e1 result is nil. */
         *e1 = *e2;
