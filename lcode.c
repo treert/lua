@@ -1675,10 +1675,9 @@ void luaK_infix (FuncState *fs, BinOpr op, expdesc *v) {
         }
         else {
           // 这么写，是想着 e2 会复用，少一次Move。
-          // luaK_exp2nextreg(fs, v);
-          // fs->freereg--;
-          // freeexp(fs, v);
-          luaK_exp2anyreg(fs, v);// 只有这个是 OK 的
+          luaK_exp2nextreg(fs, v);
+          freeexp(fs, v);// 释放掉e1 的 reg e2会使用
+        //   luaK_exp2anyreg(fs, v);// 这也是OK的
           v->qq = condjump(fs, OP_TESTNIL, v->u.info, 0, 0, 1);
         }
         break;
@@ -1767,7 +1766,9 @@ void luaK_posfix (FuncState *fs, BinOpr opr,
       }
       else if (e1->qq >= 0) {
         lua_assert(e1->k == VNONRELOC);
-        exp2reg(fs, e2, e1->u.info);/* e2 store result into e1 reg */
+        luaK_exp2nextreg(fs, e2);
+        lua_assert(e2->u.info == e1->u.info);
+        // exp2reg(fs, e2, e1->u.info);/* e2 store result into e1 reg */
         int pc = e1->qq;
         fixjump(fs, pc, fs->pc);/* jump through e2, e1 result is nil. */
         *e1 = *e2;
