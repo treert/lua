@@ -807,7 +807,7 @@ void luaK_dischargevars (FuncState *fs, expdesc *e) {
       break;
     }
     case VINDEXED: {
-      freeregs(fs, e->u.ind.t, e->u.ind.idx);
+      freeregs(fs, e->u.ind.t, e->u.ind.idx);// 这个非常重要。VINDEXED 本身可能持有2个reg
       e->u.info = luaK_codeABC(fs, OP_GETTABLE, 0, e->u.ind.t, e->u.ind.idx);
       e->k = VRELOC;
       break;
@@ -1607,7 +1607,8 @@ void luaK_prefix (FuncState *fs, UnOpr op, expdesc *e, int line) {
 }
 
 void luaK_indextestnil_addone(FuncState *fs, expdesc *v) {
-  int reg = v->u.info;// 不知道有没有问题呀
+  lua_assert(v->k == VNONRELOC);
+  int reg = v->u.info;
   int ins_idx = condjump(fs, OP_TESTNIL, reg, 0, 0, 0);
   if (v->tnil >= 0) {
     fixjump(fs, ins_idx, v->tnil);
@@ -1624,7 +1625,7 @@ void luaK_indextestnil_finish(FuncState *fs, expdesc *v) {
       need_set_top = 1;
     } else {
       reg = luaK_exp2anyreg(fs, v);
-      need_set_top = 1;
+      need_set_top = 0;
     }
     if (v->tnil == fs->pc-1) {
       luaX_syntaxerror(fs->ls, "expect index or funcall after '?', but it ended.");
@@ -1634,12 +1635,12 @@ void luaK_indextestnil_finish(FuncState *fs, expdesc *v) {
     do
     {
       int next_idx = getjump(fs, idx);
-      if (need_set_top) {
+      {
         lua_assert(idx > 0);
         Instruction *test = &fs->f->code[idx-1];
         lua_assert(GET_OPCODE(*test) == OP_TESTNIL);
         SETARG_B(*test, reg);
-        SETARG_C(*test, 1);
+        SETARG_C(*test, 1+need_set_top);
       }
       fixjump(fs, idx, pc);
       idx = next_idx;
@@ -1663,7 +1664,7 @@ void luaK_infix (FuncState *fs, BinOpr op, expdesc *v) {
     }
     // add@om
     case OPR_QQ: {// e1 ?? e2
-        // ?? 不好仿照 and or 来实现了，还没完全懂。用自己的方式来实现。
+        // ?? 短路的结果是nil，而不是 boolean。不能简单插入到 t f 链表里。
         if (vkisnotnil(v->k)) {
           // just jump, will ignore e2
           v->qq = - luaK_jump(fs) - 1;
@@ -1673,10 +1674,12 @@ void luaK_infix (FuncState *fs, BinOpr op, expdesc *v) {
           v->qq = -1;
         }
         else {
-          int reg = luaK_exp2anyreg(fs, v);
-          // todo@om 本来觉得应该加这行的。结果发现不行。assert(xxx?:xx()?['xxx']?.xx ?? 21 == 21) 报错
+          // 这么写，是想着 e2 会复用，少一次Move。
+          // luaK_exp2nextreg(fs, v);
+          // fs->freereg--;
           // freeexp(fs, v);
-          v->qq = condjump(fs, OP_TESTNIL, reg, 0, 0, 1);
+          luaK_exp2anyreg(fs, v);// 只有这个是 OK 的
+          v->qq = condjump(fs, OP_TESTNIL, v->u.info, 0, 0, 1);
         }
         break;
     }

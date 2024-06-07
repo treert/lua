@@ -1911,7 +1911,7 @@ void luaV_execute (lua_State *L, CallInfo *ci) {
             if ( ra != rb) {
               setobj2s(L, rb, s2v(ra));
             }
-            L->top = rb + 1;
+            L->top = rb + 1;// 不管怎么样，就这么干了。如果遇到问题。到时再说。 
           }
           donextjump(ci);
         }

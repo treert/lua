@@ -1363,14 +1363,14 @@ static void suffixedexp (LexState *ls, expdesc *v) {
           luaX_syntaxerror(ls, "expect index or funcall after '?'");
         }
         luaK_exp2anyreg(fs, v);
-        luaK_indextestnil_addone(fs, v);// 总感觉用的有问题
+        luaK_indextestnil_addone(fs, v);
         break;
       }
       case '.': {  /* fieldsel */
         fieldsel(ls, v);
         break;
       }
-      case '[': {  /* '[' exp ']' */ // todo@om 这儿似乎可能使用多个reg，为什么不出现问题呀。
+      case '[': {  /* '[' exp ']' */
         // '[]'【 for t[]=x】
         if (luaX_lookahead(ls) == ']') {
           luaK_exp2anyregup(fs, v);

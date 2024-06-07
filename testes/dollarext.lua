@@ -41,6 +41,12 @@ assert(xxx?.xx?.xxx?.xx == nil)
 assert(xxx?.xx?.xxx?.xx ?? 21 == 21)
 assert(xxx?:xx()?['xxx']?.xx ?? 21 == 21)
 
+local f1 = ${return 1,2,3}
+local f2 = $(...){return select("#",...)}
+
+assert(f2(f1?()) == 3)
+assert(f2(xxx?()) == 1)
+
 print "test yield concat here"
 
 local count = 0
