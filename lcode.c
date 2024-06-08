@@ -726,7 +726,9 @@ void luaK_setreturns (FuncState *fs, expdesc *e, int nresults) {
     lua_assert(e->k == VVARARG);
     SETARG_C(*pc, nresults + 1);
     SETARG_A(*pc, fs->freereg);
-    luaK_reserveregs(fs, 1);// doc@om 哎，这儿的实现怎么不统一呀，增加一个reg是啥意思!!
+    // doc@om VCall 固定占有了一个reg，这儿也占一个，平衡下。
+    // 不过这样这个函数不能重复调用的。
+    luaK_reserveregs(fs, 1);
   }
 }
 
@@ -1140,6 +1142,29 @@ static int jumponcond (FuncState *fs, expdesc *e, int cond) {
   freeexp(fs, e);
   return condjump(fs, OP_TESTSET, NO_REG, e->u.info, 0, cond);
 }
+
+/* doc@om 短路逻辑
+
+expdesc->t 和 expdesc->f 的结构
+1. 就像指针一样，指向的跳转指令。在编译过程中形成链表，指向表头。
+   luaK_concat 通过修改跳转指令的offset，在链表结尾加上新的指令。
+2. patchlistaux 会遍历链表，修正成正式的offset。链表指针置空成NO_JUMP。
+
+- luaK_goiftrue and luaK_goiffalse 两者互斥
+  - luaK_goiftrue 加入新指令到 e->f 同时置空 e->t
+  - luaK_goiffalse 加入新指令到 e->t 同时置空 e->f
+- codeorder 和 codeeq 用于 > == 等算符，使用 condjump 添加指令。
+  不会直接把比较结果保持到某个 reg 里，而是加了个 jmp 指令。
+  如果最终需要比较结果，会在jmp的目的位置增加 OP_LOADTRUE or OP_LFALSESKIP 。
+  这段逻辑见 exp2reg
+
+mylua 增加 ? 系列运算符，同时内部增加 OP_TESTNIL 指令。
+- e1 ?? e2 语法：有短路逻辑，不过实现方式不一样。
+  luaK_infix 配合 luaK_posfix ， e1 e2 把结果放入同一个寄存器。
+- f?() 语法：有短路逻辑。实现方式和 tf 链表有些像，增加了个 tnil 跳转指令链表。
+  同时还特殊处理了下 OP_TESTNIL 的实现。必要时修改 L->top，实现多返回值。
+
+*/
 
 
 /*
@@ -1676,7 +1701,7 @@ void luaK_infix (FuncState *fs, BinOpr op, expdesc *v) {
         else {
           // 这么写，是想着 e2 会复用，少一次Move。
           luaK_exp2nextreg(fs, v);
-          freeexp(fs, v);// 释放掉e1 的 reg e2会使用
+          freeexp(fs, v);// 释放掉e1 的 reg e2会复用
         //   luaK_exp2anyreg(fs, v);// 这也是OK的
           v->qq = condjump(fs, OP_TESTNIL, v->u.info, 0, 0, 1);
         }
@@ -1765,9 +1790,9 @@ void luaK_posfix (FuncState *fs, BinOpr opr,
         *e1 = *e2;/* e1 is nil, ignore */
       }
       else if (e1->qq >= 0) {
-        lua_assert(e1->k == VNONRELOC);
         luaK_exp2nextreg(fs, e2);
-        lua_assert(e2->u.info == e1->u.info);
+        lua_assert(e1->k == VNONRELOC);
+        lua_assert(e2->u.info == e1->u.info);/* 'luaK_infix' 保证了这个 */
         // exp2reg(fs, e2, e1->u.info);/* e2 store result into e1 reg */
         int pc = e1->qq;
         fixjump(fs, pc, fs->pc);/* jump through e2, e1 result is nil. */
