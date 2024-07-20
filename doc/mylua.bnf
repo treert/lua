@@ -1,0 +1,89 @@
+(*
+ 在lua的基础上增加了一点语法糖。
+ - dollar_func
+ - dollar_string
+ - ? and ??
+ - continue
+
+还有一些其他改变
+1. 关键字可以用于一些无语法歧义的地方，比如 t.key = 1 的 key
+2. 函数参数可以加一个后缀 ','。
+*)
+
+chunk ::= block
+
+block ::= {stat} [retstat]
+
+stat ::=  ';' | 
+        varlist '=' explist | 
+        functioncall | 
+        label | 
+        'break' | 'continue' |
+        'goto' Name | 
+        'do' block 'end' | 
+        'while' exp 'do' block 'end' | 
+        'repeat' block 'until' exp | 
+        'if' exp 'then' block {'elseif' exp 'then' block} ['else' block] 'end' | 
+        'for' Name '=' exp ',' exp [',' exp] 'do' block 'end' | 
+        'for' namelist 'in' explist 'do' block 'end' | 
+        'function' funcname funcbody | 
+        'local' 'function' Name funcbody | 
+        'local' attnamelist ['=' explist] |
+        dollar_func |
+        dollar_string
+
+attnamelist ::=  Name attrib {',' Name attrib}
+
+attrib ::= ['<' Name '>']
+
+retstat ::= 'return' [explist] [';']
+
+label ::= '::' Name '::'
+
+funcname ::= Name {'.' Name} [':' Name]
+
+varlist ::= var {',' var}
+
+(* 增加 ? 中断语法。只能用于读取，写入时会报错 *)
+var ::=  Name | prefixexp ['?'] '[' exp ']' | prefixexp ['?'] '.' Name
+
+functioncall ::=  prefixexp ['?'] args | prefixexp ['?'] ':' Name ['?'] args 
+
+prefixexp ::= var | functioncall | '(' exp ')'
+
+namelist ::= Name {',' Name}
+
+explist ::= exp {',' exp}
+
+exp ::=  'nil' | 'false' | 'true' | Numeral | LiteralString | '...' | functiondef | 
+        prefixexp | tableconstructor | exp binop exp | unop exp 
+
+args ::=  '(' [args_list] ')' | tableconstructor | LiteralString | dollar_string | dollar_func
+
+args_list ::= { expr ',' } { Name '=' expr ','} { expr ',' } [ Trim ',' ]
+
+functiondef ::= function funcbody
+
+funcbody ::= '(' [parlist] ')' block end
+
+# 允许结尾多一个 ','
+parlist ::= namelist [','] | namelist ',' '...' | '...'
+
+# '$' 语法糖
+dollar_func ::= '$' [ '(' [parlist] ')' ] '{' block '}'
+dollar_string ::= '$'DollarString
+
+tableconstructor ::= '{' [fieldlist] '}'
+
+fieldlist ::= field {fieldsep field} [fieldsep]
+
+field ::= '[' exp ']' '=' exp | Name '=' exp | exp
+
+fieldsep ::= ',' | ';'
+
+binop ::=  '+' | '-' | '*' | '/' | '//' | '^' | '%' | 
+        '&' | '~' | '|' | '>>' | '<<' | '..' | 
+        '<' | '<=' | '>' | '>=' | '==' | '~=' | 
+        and | or
+
+unop ::= '-' | not | '#' | '~'
