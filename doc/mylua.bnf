@@ -1,33 +1,36 @@
 (*
- 在lua的基础上增加了一点语法糖。
- - dollar_func
- - dollar_string
- - ? and ??
- - continue
-
-还有一些其他改变
-1. 关键字可以用于一些无语法歧义的地方，比如 t.key = 1 的 key
-2. 函数参数可以加一个后缀 ','。
+在lua的基础上做了一些修改
+- 分离 table 成 array 和 map。
+    - 新增 `[]` `[1,2]` 语法初始化 array。
+    - 修改了表格的一些接口实现，比如 `#` 运算符。
+- 增加了一点语法糖。
+    - dollar_func
+    - dollar_string
+    - ? and ??
+    - continue
+- 还有一些其他改变
+    1. 关键字可以用于一些无语法歧义的地方，比如 t.key = 1 的 key
+    2. 函数参数可以加一个后缀 ','。
 *)
 
 chunk ::= block
 
 block ::= {stat} [retstat]
 
-stat ::=  ';' | 
-        varlist '=' explist | 
-        functioncall | 
-        label | 
+stat ::=  ';' |
+        varlist '=' explist |
+        functioncall |
+        label |
         'break' | 'continue' |
-        'goto' Name | 
-        'do' block 'end' | 
-        'while' exp 'do' block 'end' | 
-        'repeat' block 'until' exp | 
-        'if' exp 'then' block {'elseif' exp 'then' block} ['else' block] 'end' | 
-        'for' Name '=' exp ',' exp [',' exp] 'do' block 'end' | 
-        'for' namelist 'in' explist 'do' block 'end' | 
-        'function' funcname funcbody | 
-        'local' 'function' Name funcbody | 
+        'goto' Name |
+        'do' block 'end' |
+        'while' exp 'do' block 'end' |
+        'repeat' block 'until' exp |
+        'if' exp 'then' block {'elseif' exp 'then' block} ['else' block] 'end' |
+        'for' Name '=' exp ',' exp [',' exp] 'do' block 'end' |
+        'for' namelist 'in' explist 'do' block 'end' |
+        'function' funcname funcbody |
+        'local' 'function' Name funcbody |
         'local' attnamelist ['=' explist] |
         dollar_func |
         dollar_string
@@ -56,7 +59,7 @@ namelist ::= Name {',' Name}
 explist ::= exp {',' exp}
 
 exp ::=  'nil' | 'false' | 'true' | Numeral | LiteralString | '...' | functiondef | 
-        prefixexp | tableconstructor | exp binop exp | unop exp 
+        prefixexp | tableconstructor | array_constructor | exp binop exp | unop exp 
 
 args ::=  '(' [args_list] ')' | tableconstructor | LiteralString | dollar_string | dollar_func
 
@@ -72,6 +75,9 @@ parlist ::= namelist [','] | namelist ',' '...' | '...'
 # '$' 语法糖
 dollar_func ::= '$' [ '(' [parlist] ')' ] '{' block '}'
 dollar_string ::= '$'DollarString
+
+# add syntax [1,2,3]
+array_constructor ::= '[' exp { fieldsep exp } [ fieldsep ]']'
 
 tableconstructor ::= '{' [fieldlist] '}'
 
