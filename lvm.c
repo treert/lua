@@ -756,7 +756,7 @@ void luaV_concat(lua_State* L, int total) {
       luaG_runerror(L, "string length overflow");
   }
   TString* ts;
-  if (len < LUAI_MAXSHORTLEN) {  /* is result a short string? */
+  if (len <= LUAI_MAXSHORTLEN) {  /* is result a short string? */
     char buff[LUAI_MAXSHORTLEN];
     copy2buff(L->top, total, buff);  /* copy strings to buffer */
     ts = luaS_newlstr(L, buff, len);
@@ -798,7 +798,7 @@ void luaV_concat_old (lua_State *L, int total) {
           luaG_runerror(L, "string length overflow");
         tl += l;
       }
-      if (tl < LUAI_MAXSHORTLEN) {  /* is result a short string? */
+      if (tl <= LUAI_MAXSHORTLEN) {  /* is result a short string? */
         char buff[LUAI_MAXSHORTLEN];
         copy2buff(top, n, buff);  /* copy strings to buffer */
         ts = luaS_newlstr(L, buff, tl);
