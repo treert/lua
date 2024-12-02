@@ -228,6 +228,8 @@ static int check_next2 (LexState *ls, const char *set) {
 ** mark, to avoid reading '3-4' or '0xe+1' as a single number.
 **
 ** The caller might have already read an initial dot.
+**
+** mod@om support 1_000_00
 */
 static int read_numeral (LexState *ls, SemInfo *seminfo) {
   TValue obj;
@@ -242,6 +244,10 @@ static int read_numeral (LexState *ls, SemInfo *seminfo) {
       check_next2(ls, "-+");  /* optional exponent sign */
     else if (lisxdigit(ls->current) || ls->current == '.')  /* '%x|%.' */
       save_and_next(ls);
+    //++om
+    else if (ls->current == '_')
+      next(ls);
+    //--om
     else break;
   }
   if (lislalpha(ls->current))  /* is numeral touching a letter? */

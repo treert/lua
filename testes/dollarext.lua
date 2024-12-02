@@ -85,4 +85,10 @@ end)
 
 assert(ok)
 
+--- test 1_000_000
+
+assert(1_000_000 == 1000000)
+assert(1._23 == 1.23)
+assert(1._23e1_0 == 1.23e10)
+
 print "$ OK\n"
