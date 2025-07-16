@@ -968,9 +968,20 @@ static void adjust_named_args(lua_State *L, StkId func, int pre_args_cnt, int na
     // 赋值命名参数
     for (int i = 0; i < fixparams; i++) {
       TString* argname = argnames[i];
+      // 从后往前遍历
       for (int k = named_args_cnt-2; k >= 0; k -= 2) {
         TString* inname = tsvalue(s2v(named_args_base + k));
-        if (luaS_eqstr(argname, inname)) {
+        // if (strcmp("",getstr(inname))){
+        if (0 == tsslen(inname)) {
+          // try raw get from table. not trigger error.
+          const TValue *slot;
+          TValue *t = s2v(named_args_base + k + 1);
+          if (luaV_fastget(L, t, argname, slot, luaH_getstr)) {
+            setobj2s(L, pre_args_base + i, slot);
+            break;
+          }
+        }
+        else if (luaS_eqstr(argname, inname)) {
           setobjs2s(L, pre_args_base + i, named_args_base + k + 1);
           break;
         }

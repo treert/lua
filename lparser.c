@@ -168,8 +168,9 @@ static TString* getstr_from_name_or_keyword(LexState* ls, int skip_token) {
 }
 
 // add@om
-static int NextIsNameAndEq(LexState* ls) {
-    return ls->t.token == TK_NAME && luaX_lookahead(ls) == '=';
+// Name '=' | '*'
+static int NextIsKWArg(LexState* ls) {
+    return ls->t.token == '*' || (ls->t.token == TK_NAME  && luaX_lookahead(ls) == '=');
 }
 
 // add@om
@@ -1224,7 +1225,7 @@ static int explist_in_funcall(LexState* ls, expdesc* v, int line) {
   int n = 0;
   v->k = VVOID;
   if (ls->t.token == ')') return 0;
-  while (!NextIsNameAndEq(ls)) {
+  while (!NextIsKWArg(ls)) {
     if (n) luaK_exp2nextreg(ls->fs, v);
     expr(ls, v);
     n++;
@@ -1246,24 +1247,29 @@ static void funcargs(LexState* ls, expdesc* f, int line) {
 
   int pre_args_cnt = 0, named_args_cnt = 0, post_args_cnt = 0;
   switch (ls->t.token) {
-    case '(': {  /* funcargs -> '(' { expr ',' } { Name '=' expr ','} { expr ',' } ')' */
+    case '(': {  /* funcargs -> '(' { expr ',' } { (Name'=' |'*' ) expr ','} { expr ',' } ')' */
       luaX_next(ls);
       // { expr ',' }
       pre_args_cnt = explist_in_funcall(ls, &args, line);
-      if (NextIsNameAndEq(ls)) {
+      if (NextIsKWArg(ls)) {
         if (pre_args_cnt) luaK_exp2nextreg(ls->fs, &args);
-        // { Name '=' exp ','}
+        // { (Name'=' |'*' ) exp ','}
         do{
-          codename(ls, &args);
+          if (ls->t.token == TK_NAME){
+            codename(ls, &args);
+            checknext(ls, '=');
+          } else {
+            codestring(&args, luaS_newliteral(ls->L, ""));// key 置空
+            checknext(ls, '*');;// skip *
+          }
           luaK_exp2nextreg(ls->fs, &args);
-          checknext(ls, '=');
           expr(ls, &args);
           luaK_exp2nextreg(ls->fs, &args);
           named_args_cnt += 2;
           if (testnext(ls, ',')) continue;
           check_match_only(ls, ')', '(', line);
           break;
-        } while (NextIsNameAndEq(ls));
+        } while (NextIsKWArg(ls));
         // 可能还有 { expr ',' }
         post_args_cnt = explist_in_funcall(ls, &args, line);
       }
