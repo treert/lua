@@ -310,7 +310,7 @@ OP_NAMEDARGPREP,/* A B C 调整命名参数, A 是前面参数数量, B是后面
 
 OP_VARARG,/*	A C	R[A], R[A+1], ..., R[A+C-2] = vararg		*/
 
-OP_VARARGPREP,/*A	(adjust vararg parameters)			*/
+OP_VARARGPREP,/*A	(adjust vararg parameters)			*/ // doc@om 这个好像可以去掉，在函数 precall 跳转参数时直接处理了。
 
 OP_EXTRAARG/*	Ax	extra (larger) argument for previous opcode	*/
 } OpCode;

@@ -999,9 +999,10 @@ static void adjust_named_args(lua_State *L, StkId func, int pre_args_cnt, int na
     }
   }
   else{
+    // 想了想，报错了事。mylua 的 named-args 是给调用方使用的，调用方需要了解自己调用的函数是什么
+    luaG_runerror(L, "named-args not support c function. use lua function wrap it.");
     // can not support c function, only left pre args.
-    // luaG_runerror(L, "named args can not support c function");
-    L->top = func + pre_args_cnt + 1;
+    // L->top = func + pre_args_cnt + 1;
   }
 }
 
