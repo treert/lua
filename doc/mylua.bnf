@@ -63,7 +63,7 @@ exp ::=  'nil' | 'false' | 'true' | Numeral | LiteralString | '...' | functionde
 
 args ::=  '(' [args_list] ')' | tableconstructor | LiteralString | dollar_string | dollar_func
 
-args_list ::= { expr ',' } { Name '=' expr ','} { expr ',' } [ Trim ',' ]
+args_list ::= { expr ',' } { (Name '=' | '*') expr ','} { expr ',' } [ Trim ',' ]
 
 functiondef ::= function funcbody
 
