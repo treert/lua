@@ -32,5 +32,6 @@ assert(f(a=11,b=11, g()) == 11 + 6)
 local args = {a=1,b=2,c=3}
 assert(f(a=11,b=11,*args, g()) == 1 + 6)
 assert(f(b=11,*args,a=11, g()) == 11 + 6)
+assert(f(*[100],13) == 100 + 13)
 
 print "test named args OK"

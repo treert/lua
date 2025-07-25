@@ -980,6 +980,10 @@ static void adjust_named_args(lua_State *L, StkId func, int pre_args_cnt, int na
             setobj2s(L, pre_args_base + i, slot);
             break;
           }
+          else if (luaV_fastgeti(L, t, i+1, slot)) {
+            setobj2s(L, pre_args_base + i, slot);
+            break;
+          }
         }
         else if (luaS_eqstr(argname, inname)) {
           setobjs2s(L, pre_args_base + i, named_args_base + k + 1);
