@@ -1142,6 +1142,9 @@ static void dollar_expr_string(LexState* ls, expdesc* e) {
             expr(ls, e);
             luaK_exp2nextreg(ls->fs, e);
             check_match(ls, '}', '{', line);
+            if (ls->linenumber != dollar_line) {
+                luaX_syntaxerror(ls, "$string do not support multi-line inner-expr.");
+            }
             n++;
         }
         else {

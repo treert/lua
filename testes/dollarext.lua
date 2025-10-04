@@ -79,11 +79,15 @@ else
     assert(not ok)
 end
 
-ok = pcall(function ()
-    print($"${ ${} }")
-end)
+-- $string inner expr not support multi-line
+ok = load([[ a = $'${ 123 }']])
 
 assert(ok)
+
+ok = load([[ a = $'${
+     123 }']])
+
+assert(not ok)
 
 --- test 1_000_000
 
